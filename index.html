@@ -142,7 +142,7 @@
     .hint a:hover { text-decoration: underline; }
 
     /* Toggle */
-    .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 4px 0; }
+    .toggle-row { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 6px 0; }
     .toggle-row input[type=checkbox] { display: none; }
     .toggle-track {
       width: 40px; height: 22px;
@@ -598,6 +598,23 @@
         <button class="btn-primary" id="generate-btn">
           <span class="btn-icon">⚡</span>Generate Draft
         </button>
+      </div>
+
+      <div class="setup-card" style="margin-top: 20px;">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">🖨️ Quick Print a Single Card</label>
+          <p class="hint" style="margin-top: 2px;">Type any card name to fetch and print it instantly — no draft needed.</p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;">
+          <button class="btn-secondary" id="setup-quick-print-btn" style="white-space: nowrap;">⚡ Print Card</button>
+          <button class="btn-secondary" id="setup-printer-connect-btn">🖨️ Connect Printer</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+          <div class="printer-dot" id="setup-printer-dot"></div>
+          <span class="printer-label" id="setup-printer-label" style="font-size: 0.82rem;">No printer connected</span>
+          <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;"></span>
+        </div>
       </div>
     </section>
 
@@ -1450,14 +1467,11 @@ async function generateDraft() {
       let rawCode = document.getElementById('set-code-input')?.value.trim().toLowerCase() || '';
       if (!rawCode) { showScreen('setup'); genBtn.disabled = false; return; }
 
-      // ASCII easter egg
+      // ASCII easter egg (only activate, never deactivate — Konami code may have set it)
       if (rawCode.startsWith('ascii')) {
         state.retroMode = true;
         document.body.classList.add('retro');
         rawCode = rawCode.replace(/^ascii\s*/, '').trim();
-      } else {
-        state.retroMode = false;
-        document.body.classList.remove('retro');
       }
 
       state.setCode = rawCode || 'dft';
@@ -1772,8 +1786,8 @@ async function toggleThermalPreview(enabled) {
 // ═══════════════════════════════════════════════════════════════
 // QUICK PRINT (Single Card)
 // ═══════════════════════════════════════════════════════════════
-async function quickPrint() {
-  const input = document.getElementById('quick-print-input');
+async function quickPrintFrom(inputId) {
+  const input = document.getElementById(inputId);
   const name = (input?.value || '').trim();
   if (!name) return;
   if (!printerState.connected) {
@@ -1781,11 +1795,17 @@ async function quickPrint() {
     return;
   }
 
-  setPrintingIndicator(`Fetching "${name}" from Scryfall…`);
+  const statusMsg = (msg) => {
+    setPrintingIndicator(msg);
+    const sStatus = document.getElementById('setup-printer-status');
+    if (sStatus) sStatus.textContent = msg;
+  };
+
+  statusMsg(`Fetching "${name}" from Scryfall…`);
   const card = await fetchCardByName(name);
   if (!card) {
-    setPrintingIndicator(`Card not found: "${name}"`);
-    setTimeout(() => setPrintingIndicator(''), 3000);
+    statusMsg(`Card not found: "${name}"`);
+    setTimeout(() => statusMsg(''), 3000);
     return;
   }
 
@@ -1811,10 +1831,12 @@ async function quickPrint() {
     }
   }
 
-  setPrintingIndicator(`Printed: ${card.name}`);
-  setTimeout(() => setPrintingIndicator(''), 3000);
+  statusMsg(`Printed: ${card.name}`);
+  setTimeout(() => statusMsg(''), 3000);
   input.value = '';
 }
+
+async function quickPrint() { return quickPrintFrom('quick-print-input'); }
 
 // ═══════════════════════════════════════════════════════════════
 // LOCAL STORAGE PERSISTENCE
@@ -1955,10 +1977,20 @@ function init() {
   // Gang Print checkbox → save settings
   document.getElementById('gang-print-toggle').addEventListener('change', () => saveSettings());
 
-  // Quick Print
-  document.getElementById('quick-print-btn').addEventListener('click', () => quickPrint());
+  // Quick Print (results screen)
+  document.getElementById('quick-print-btn').addEventListener('click', () => quickPrintFrom('quick-print-input'));
   document.getElementById('quick-print-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') quickPrint();
+    if (e.key === 'Enter') quickPrintFrom('quick-print-input');
+  });
+
+  // Quick Print (setup screen)
+  document.getElementById('setup-quick-print-btn').addEventListener('click', () => quickPrintFrom('setup-quick-print-input'));
+  document.getElementById('setup-quick-print-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') quickPrintFrom('setup-quick-print-input');
+  });
+  document.getElementById('setup-printer-connect-btn').addEventListener('click', async () => {
+    if (printerState.connected) await disconnectPrinter();
+    else await connectPrinter();
   });
 
   // Persist settings on form changes
@@ -2083,70 +2115,72 @@ function floydSteinbergDither(imageData) {
 /**
  * Port of Python's generate_card_image().
  * Returns an offscreen 600×938 canvas with the full thermal card layout.
+ * Uses M (margin) to prevent printer edge clipping.
  */
 async function renderCardToCanvas(face) {
   const W = PRINT_CARD_W, H = PRINT_CARD_H;
+  const M = 8; // safe margin — prevents left/right edge clipping on thermal printers
+  const UW = W - M * 2; // usable width inside margins
+
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // White background (thermal paper)
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'black';
 
-  let y = 0;
+  let y = M;
 
-  // ── 1. Name + Mana Cost (dynamic font shrink, mirrors Python loop) ──
+  // ── 1. Name + Mana Cost ──
   let titleSize = 32;
   ctx.font = `bold ${titleSize}px monospace`;
   const mana = face.manaCost || '';
   let manaW = ctx.measureText(mana).width;
 
-  // DFC symbol width reservation
   const dfcStr = face.dfcSide === 'front' ? (state.retroMode ? '[^]' : '\u25b2') : face.dfcSide === 'back' ? (state.retroMode ? '[v]' : '\u25bc') : '';
   let dfcW = dfcStr ? ctx.measureText(dfcStr).width + 8 : 0;
 
-  while (ctx.measureText(face.name).width + manaW + dfcW + 10 > W && titleSize > 10) {
+  while (ctx.measureText(face.name).width + manaW + dfcW + 10 > UW && titleSize > 10) {
     titleSize--;
     ctx.font = `bold ${titleSize}px monospace`;
     manaW = ctx.measureText(mana).width;
     if (dfcStr) dfcW = ctx.measureText(dfcStr).width + 8;
   }
 
-  let titleX = 0;
+  let titleX = M;
   if (dfcStr) {
     ctx.fillText(dfcStr, titleX, y + titleSize);
     titleX += ctx.measureText(dfcStr).width + 8;
   }
   ctx.fillText(face.name, titleX, y + titleSize);
-  if (mana) ctx.fillText(mana, W - manaW, y + titleSize);
+  if (mana) ctx.fillText(mana, W - M - manaW, y + titleSize);
   y += titleSize + 6;
 
-  // ── 2. Calculate layout dimensions (mirrors Python remaining_height logic) ──
+  // ── 2. Calculate layout dimensions (matches Python remaining_height logic) ──
   const typeSize = 26;
   ctx.font = `bold ${typeSize}px monospace`;
 
   const ptHeight = (face.power != null && face.toughness != null) ? 40
                  : (face.loyalty != null)                         ? 48 : 0;
 
-  const remaining = H - (y + typeSize + 15 + ptHeight);
+  const remaining = H - (y + typeSize + 15 + ptHeight + M);
 
-  // Text sizing: start at 20px and shrink to fit (Python starts at 47px PIL units)
-  let textSize = 20;
+  // Text sizing: start at 47px to match Python, shrink dynamically
+  let textSize = 47;
   const lineSpacing = 4;
   let wrappedLines = [];
   let textHeight = 0;
 
   if (face.text) {
     ctx.font = `${textSize}px monospace`;
-    wrappedLines = wrapTextForPrint(ctx, face.text, W);
+    wrappedLines = wrapTextForPrint(ctx, face.text, UW);
     textHeight = wrappedLines.length * (textSize + lineSpacing);
     const textMax = Math.floor(remaining * 0.5);
-    while (textHeight > textMax && textSize >= 10) {
-      textSize--;
+    while (textHeight > textMax && textSize >= 16) {
+      textSize -= 2;
       ctx.font = `${textSize}px monospace`;
-      wrappedLines = wrapTextForPrint(ctx, face.text, W);
+      wrappedLines = wrapTextForPrint(ctx, face.text, UW);
       textHeight = wrappedLines.length * (textSize + lineSpacing);
     }
     if (textHeight > textMax) textHeight = textMax;
@@ -2160,13 +2194,12 @@ async function renderCardToCanvas(face) {
       const artImg = await loadImageForCanvas(face.artCropUri);
 
       if (state.retroMode) {
-        // ASCII dot-matrix rendering (ported from Python ASCII_MODE)
         const asciiChars = ['@', '#', '8', '&', 'o', ':', '*', '.', ' '];
         const asciFontSize = 14;
         ctx.font = `${asciFontSize}px monospace`;
         const charW = ctx.measureText('A').width || 8;
         const charH = asciFontSize;
-        const cols = Math.floor(W / charW);
+        const cols = Math.floor(UW / charW);
         const rows = Math.floor(artH / charH);
 
         if (cols > 0 && rows > 0) {
@@ -2191,7 +2224,7 @@ async function renderCardToCanvas(face) {
           applyContrast(sData, 1.6);
 
           ctx.fillStyle = 'black';
-          ctx.fillText('-'.repeat(cols), 0, y + asciFontSize);
+          ctx.fillText('-'.repeat(cols), M, y + asciFontSize);
           let artY = y + charH;
           for (let row = 0; row < rows; row++) {
             let line = '';
@@ -2201,15 +2234,15 @@ async function renderCardToCanvas(face) {
               const charIdx = Math.min(asciiChars.length - 1, Math.floor((gray / 255) * (asciiChars.length - 1)));
               line += asciiChars[charIdx];
             }
-            ctx.fillText(line, 0, artY + asciFontSize);
+            ctx.fillText(line, M, artY + asciFontSize);
             artY += charH;
           }
-          ctx.fillText('-'.repeat(cols), 0, artY + asciFontSize);
+          ctx.fillText('-'.repeat(cols), M, artY + asciFontSize);
         }
       } else {
-        // Standard dithered rendering
+        const artW = UW;
         const artRatio = artImg.naturalWidth / artImg.naturalHeight;
-        const targetRatio = W / artH;
+        const targetRatio = artW / artH;
         let sx, sy, sw, sh;
         if (artRatio > targetRatio) {
           sh = artImg.naturalHeight; sw = sh * targetRatio;
@@ -2220,35 +2253,35 @@ async function renderCardToCanvas(face) {
         }
 
         const artCanvas = document.createElement('canvas');
-        artCanvas.width = W; artCanvas.height = artH;
+        artCanvas.width = artW; artCanvas.height = artH;
         const artCtx = artCanvas.getContext('2d');
-        artCtx.drawImage(artImg, sx, sy, sw, sh, 0, 0, W, artH);
+        artCtx.drawImage(artImg, sx, sy, sw, sh, 0, 0, artW, artH);
 
-        const artData = artCtx.getImageData(0, 0, W, artH);
+        const artData = artCtx.getImageData(0, 0, artW, artH);
         applyBrightness(artData, 1.2);
         applyContrast(artData, 1.1);
 
         const dithered = floydSteinbergDither(artData);
-        const outData = artCtx.createImageData(W, artH);
+        const outData = artCtx.createImageData(artW, artH);
         for (let i = 0; i < dithered.length; i++) {
           const v = dithered[i] ? 255 : 0;
           outData.data[i*4] = v; outData.data[i*4+1] = v;
           outData.data[i*4+2] = v; outData.data[i*4+3] = 255;
         }
         artCtx.putImageData(outData, 0, 0);
-        ctx.drawImage(artCanvas, 0, y);
+        ctx.drawImage(artCanvas, M, y);
 
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 2;
-        ctx.strokeRect(0, y, W, artH);
+        ctx.strokeRect(M, y, artW, artH);
       }
     } catch {
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 1;
-      ctx.strokeRect(0, y, W, artH);
+      ctx.strokeRect(M, y, UW, artH);
       ctx.font = '18px monospace';
       ctx.fillStyle = 'black';
-      ctx.fillText('[Art Unavailable]', 10, y + artH / 2);
+      ctx.fillText('[Art Unavailable]', M + 10, y + artH / 2);
     }
   }
   y += artH + 8;
@@ -2256,10 +2289,10 @@ async function renderCardToCanvas(face) {
   // ── 4. Type Line + Rarity ──
   ctx.font = `bold ${typeSize}px monospace`;
   ctx.fillStyle = 'black';
-  ctx.fillText(face.typeLine, 0, y + typeSize);
+  ctx.fillText(face.typeLine, M, y + typeSize);
   const rarityStr = face.rarity || 'C';
   const rarityW = ctx.measureText(rarityStr).width;
-  ctx.fillText(rarityStr, W - rarityW, y + typeSize);
+  ctx.fillText(rarityStr, W - M - rarityW, y + typeSize);
   y += typeSize + 10;
 
   // ── 5. Oracle Text ──
@@ -2267,8 +2300,8 @@ async function renderCardToCanvas(face) {
     ctx.font = `${textSize}px monospace`;
     ctx.fillStyle = 'black';
     for (const line of wrappedLines) {
-      if (y + textSize > H - ptHeight) break; // clip overflow
-      ctx.fillText(line, 0, y + textSize);
+      if (y + textSize > H - ptHeight - M) break;
+      ctx.fillText(line, M, y + textSize);
       y += textSize + lineSpacing;
     }
   }
@@ -2280,17 +2313,17 @@ async function renderCardToCanvas(face) {
       const ptStr = `[ ${face.power} / ${face.toughness} ]`;
       const ptW = ctx.measureText(ptStr).width;
       ctx.fillStyle = 'black';
-      ctx.fillText(ptStr, W - ptW - 8, H - 10);
+      ctx.fillText(ptStr, W - M - ptW, H - M - 10);
     } else {
       const ptStr = `${face.power} / ${face.toughness}`;
       const ptW = ctx.measureText(ptStr).width;
       ctx.fillStyle = 'white';
-      ctx.fillRect(W - ptW - 16, H - 48, ptW + 16, 48);
+      ctx.fillRect(W - M - ptW - 16, H - 48, ptW + 16, 48);
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 2;
-      ctx.strokeRect(W - ptW - 16, H - 48, ptW + 16, 48);
+      ctx.strokeRect(W - M - ptW - 16, H - 48, ptW + 16, 48);
       ctx.fillStyle = 'black';
-      ctx.fillText(ptStr, W - ptW - 8, H - 10);
+      ctx.fillText(ptStr, W - M - ptW - 8, H - 10);
     }
   }
 
@@ -2300,20 +2333,20 @@ async function renderCardToCanvas(face) {
     if (state.retroMode) {
       const loyStr = `{ ${face.loyalty} }`;
       const loyW = ctx.measureText(loyStr).width;
-      let x0 = W - loyW - 8;
+      let x0 = W - M - loyW;
       if (face.power != null && face.toughness != null) {
         const ptStr = `[ ${face.power} / ${face.toughness} ]`;
         x0 -= (ctx.measureText(ptStr).width + 16);
       }
       ctx.fillStyle = 'black';
-      ctx.fillText(loyStr, x0, H - 10);
+      ctx.fillText(loyStr, x0, H - M - 10);
     } else {
       const loyStr = String(face.loyalty);
       const loyW = ctx.measureText(loyStr).width;
       const boxW = Math.max(loyW + 24, 48);
       const boxH = 48;
 
-      let x0 = W - boxW;
+      let x0 = W - M - boxW;
       if (face.power != null && face.toughness != null) {
         const ptW = ctx.measureText(`${face.power} / ${face.toughness}`).width;
         x0 -= (ptW + 24);
@@ -2502,6 +2535,19 @@ function setPrinterStatus(msg, connected) {
     btn.classList.remove('connected');
   }
   if (status) status.textContent = msg;
+
+  // Mirror status to setup-screen printer indicators
+  const sDot = document.getElementById('setup-printer-dot');
+  const sLabel = document.getElementById('setup-printer-label');
+  const sStatus = document.getElementById('setup-printer-status');
+  const sBtn = document.getElementById('setup-printer-connect-btn');
+  if (sDot) sDot.className = connected ? 'printer-dot connected' : 'printer-dot';
+  if (sLabel) sLabel.textContent = connected ? 'Printer ready' : 'No printer connected';
+  if (sStatus) sStatus.textContent = msg;
+  if (sBtn) {
+    sBtn.textContent = connected ? '⏏ Disconnect' : '🖨️ Connect Printer';
+    if (connected) sBtn.classList.add('connected'); else sBtn.classList.remove('connected');
+  }
 }
 
 function setPrintingIndicator(msg) {
@@ -2553,7 +2599,8 @@ async function printCardFace(face, isLastFace, isLastCardInPack = true) {
       await sleep(1500);
     }
   } else {
-    await printerSend(new Uint8Array([0x1B, 0x4A, 0x14]));
+    // Feed 20 blank lines between DFC faces (ESC d n = print and feed n lines)
+    await printerSend(new Uint8Array([0x1B, 0x64, 0x14]));
     await sleep(1000);
   }
 }
