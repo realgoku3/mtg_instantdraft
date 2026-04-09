@@ -307,6 +307,16 @@
       grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
       gap: 12px;
     }
+    .pack-block .card-grid {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
+    }
+    .pack-block.expanded .card-grid {
+      max-height: 5000px;
+      opacity: 1;
+    }
 
     /* Card component */
     .card-item {
@@ -461,11 +471,72 @@
 
     /* ── RETRO MODE ── */
     body.retro { background: #000; font-family: 'Courier New', monospace; }
+    body.retro .app-header { background: #000; border-color: #00ff41; }
+    body.retro .app-header::before { background: radial-gradient(ellipse 60% 80% at 50% -20%, rgba(0,255,65,0.12) 0%, transparent 70%); }
     body.retro .app-title { font-family: monospace; color: #00ff41; text-shadow: 0 0 10px #00ff41; }
+    body.retro .app-subtitle { color: #00ff41; opacity: 0.6; font-family: monospace; }
+    body.retro .mode-btn { font-family: monospace; border-color: #003300; color: #00aa00; background: #001100; }
+    body.retro .mode-btn:hover, body.retro .mode-btn.active { border-color: #00ff41; color: #00ff41; background: rgba(0,255,65,0.1); box-shadow: 0 0 8px rgba(0,255,65,0.3); }
+    body.retro .setup-card { background: #001100; border-color: #003300; }
+    body.retro input, body.retro select, body.retro textarea { background: #000; border-color: #003300; color: #00ff41; font-family: monospace; }
+    body.retro input:focus, body.retro select:focus, body.retro textarea:focus { border-color: #00ff41; box-shadow: 0 0 0 3px rgba(0,255,65,0.15); }
+    body.retro label, body.retro .toggle-label, body.retro .form-group label { color: #00aa00; }
+    body.retro .hint { color: #005500; }
+    body.retro .hint a { color: #00ff41; }
+    body.retro .btn-primary { background: #00ff41; color: #000; font-family: monospace; box-shadow: 0 0 20px rgba(0,255,65,0.3); }
+    body.retro .btn-secondary { border-color: #003300; color: #00aa00; background: #001100; font-family: monospace; }
+    body.retro .btn-secondary:hover { border-color: #00ff41; color: #00ff41; }
+    body.retro .results-title { color: #00ff41; font-family: monospace; }
     body.retro .card-item img { filter: grayscale(1) contrast(1.3); }
-    body.retro .card-item { box-shadow: 0 0 8px #00ff4155; }
+    body.retro .card-item { box-shadow: 0 0 8px #00ff4155; border: 1px solid #003300; }
+    body.retro .pack-header { border-color: #003300; }
     body.retro .pack-title { color: #00ff41; font-family: monospace; }
-    body.retro .btn-primary { background: #00ff41; color: #000; font-family: monospace; }
+    body.retro .pack-meta, body.retro .pack-badge { color: #00aa00; font-family: monospace; border-color: #003300; background: #001100; }
+    body.retro .pack-chevron { color: #00ff41; }
+    body.retro .printer-bar { background: #001100; border-color: #003300; }
+    body.retro .printer-label, body.retro .printer-status-text { color: #00aa00; font-family: monospace; }
+    body.retro .section-title { color: #00ff41; font-family: monospace; border-color: #003300; }
+    body.retro .progress-fill { background: #00ff41; }
+    body.retro .progress-spinner { border-color: #003300; border-top-color: #00ff41; }
+    body.retro #progress-text { color: #00aa00; font-family: monospace; }
+    body.retro .divider { background: #003300; }
+    body.retro .rarity-gem { font-family: monospace; }
+    body.retro ::selection { background: #00ff41; color: #000; }
+
+    /* ── COLLAPSIBLE PACKS ── */
+    .pack-header { cursor: pointer; user-select: none; }
+    .pack-chevron { display: inline-block; margin-right: 6px; font-size: 0.8rem; color: var(--text3); transition: transform 0.25s ease; }
+    .pack-block.expanded .pack-chevron { transform: rotate(90deg); }
+
+    /* ── THERMAL PREVIEW TOGGLE ── */
+    .thermal-toggle-wrap { display: flex; align-items: center; gap: 8px; }
+    .thermal-toggle-wrap .toggle-label { font-size: 0.83rem; white-space: nowrap; }
+
+    /* ── GANG PRINTING ── */
+    .gang-print-row { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+    .gang-print-row input[type=checkbox] { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+    .gang-print-row label { font-size: 0.82rem; color: var(--text2); cursor: pointer; white-space: nowrap; }
+
+    /* ── CANCEL PRINT ── */
+    .btn-cancel-print {
+      padding: 8px 16px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.5);
+      border-radius: var(--radius);
+      color: #fca5a5;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+    .btn-cancel-print:hover { background: rgba(239,68,68,0.3); border-color: #ef4444; color: #fff; }
+
+    /* ── QUICK PRINT ── */
+    .quick-print-row { display: flex; align-items: center; gap: 6px; min-width: 180px; }
+    .quick-print-row input[type=text] { flex: 1; padding: 6px 10px; font-size: 0.82rem; min-width: 100px; }
+    .quick-print-row button { white-space: nowrap; }
 
     /* ── SCROLLBAR ── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -542,6 +613,13 @@
       <div class="results-header">
         <h2 class="results-title" id="results-title">Draft Complete</h2>
         <div class="results-actions">
+          <button class="btn-secondary" id="print-all-btn" style="display:none">🖨️ Print All Packs</button>
+          <button class="btn-cancel-print" id="cancel-print-btn" style="display:none">⏹️ Cancel Print</button>
+          <label class="thermal-toggle-wrap toggle-row" title="Preview cards as they would appear on thermal printer">
+            <input type="checkbox" id="thermal-preview-toggle">
+            <span class="toggle-track"></span>
+            <span class="toggle-label">Thermal Preview</span>
+          </label>
           <button class="btn-secondary" id="new-draft-btn">↩ New Draft</button>
         </div>
       </div>
@@ -549,6 +627,14 @@
         <div class="printer-dot" id="printer-dot"></div>
         <span class="printer-label" id="printer-label">No printer connected</span>
         <span class="printer-status-text" id="printer-status-text"></span>
+        <div class="gang-print-row">
+          <input type="checkbox" id="gang-print-toggle">
+          <label for="gang-print-toggle">Gang Print (no cuts)</label>
+        </div>
+        <div class="quick-print-row">
+          <input type="text" id="quick-print-input" placeholder="Quick print card…" spellcheck="false">
+          <button class="btn-printer-connect" id="quick-print-btn" title="Fetch and print single card">⚡ Print</button>
+        </div>
         <button class="btn-printer-connect" id="connect-printer-btn">🖨️ Connect Printer</button>
       </div>
       <div id="error-banner"></div>
@@ -1068,6 +1154,12 @@ const state = {
   numDrafters: 8,
   includeTokens: false,
   retroMode: false,
+  thermalPreview: false,
+  gangPrinting: false,
+  isPrintingCanceled: false,
+  isPrinting: false,
+  allPackFaces: [],
+  allPackHeaders: [],
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -1099,6 +1191,7 @@ function rarityColor(r) {
 function buildCardElement(face, isBack = false) {
   const item = document.createElement('div');
   item.className = 'card-item';
+  item._faces = [face];
   item.title = `${face.name}${face.manaCost ? '  ' + face.manaCost : ''}`;
 
   if (face.isDFC && !isBack) {
@@ -1135,6 +1228,7 @@ function buildCardElement(face, isBack = false) {
 function buildDFCElement(frontFace, backFace) {
   const item = document.createElement('div');
   item.className = 'card-item';
+  item._faces = [frontFace, backFace];
   item.title = `${frontFace.name} // ${backFace.name}`;
 
   const frontImg = document.createElement('img');
@@ -1175,20 +1269,34 @@ function renderPackBlock(header, cards) {
   const block = document.createElement('div');
   block.className = 'pack-block';
 
+  state.allPackFaces.push(cards);
+  state.allPackHeaders.push(header);
+
   const ph = document.createElement('div');
   ph.className = 'pack-header';
   ph.innerHTML = `
+    <span class="pack-chevron">►</span>
     <span class="pack-title">${escHtml(header.title)}</span>
     <span class="pack-meta">${escHtml(header.setName)}</span>
     <span class="pack-badge">${escHtml(header.type)}</span>
     <span class="pack-badge">${cards.length} cards</span>
   `;
 
+  ph.addEventListener('click', (e) => {
+    if (e.target.closest('.pack-print-btn')) return;
+    block.classList.toggle('expanded');
+    const chevron = ph.querySelector('.pack-chevron');
+    if (chevron) chevron.textContent = block.classList.contains('expanded') ? '▼' : '►';
+  });
+
   const printBtn = document.createElement('button');
   printBtn.className = 'pack-print-btn';
   printBtn.textContent = '🖨️ Print Pack';
   printBtn.disabled = !printerState.connected;
-  printBtn.addEventListener('click', () => printPack(cards, header, printBtn));
+  printBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    printPack(cards, header, printBtn);
+  });
   ph.appendChild(printBtn);
 
   block.appendChild(ph);
@@ -1196,7 +1304,6 @@ function renderPackBlock(header, cards) {
   const grid = document.createElement('div');
   grid.className = 'card-grid';
 
-  // Group DFC pairs: faces come in order [front, back] for true DFCs
   let i = 0;
   while (i < cards.length) {
     const face = cards[i];
@@ -1264,6 +1371,11 @@ async function generateDraft() {
   tokensContainer.innerHTML = '';
   document.getElementById('tokens-section').style.display = 'none';
   document.getElementById('error-banner').innerHTML = '';
+  state.allPackFaces = [];
+  state.allPackHeaders = [];
+  state.isPrintingCanceled = false;
+  document.getElementById('cancel-print-btn').style.display = 'none';
+  document.getElementById('print-all-btn').style.display = 'none';
 
   const poolCache = {};
   const tokenCache = {};
@@ -1458,6 +1570,7 @@ async function generateDraft() {
     }
 
     setProgress(100);
+    updatePrinterUI();
 
   } catch (err) {
     showError(`Draft generation error: ${err.message}`);
@@ -1562,6 +1675,237 @@ function titleCapital(str) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// PRINT ALL PACKS
+// ═══════════════════════════════════════════════════════════════
+async function printAllPacks() {
+  if (!printerState.connected || !state.allPackFaces.length) return;
+
+  state.isPrintingCanceled = false;
+  state.isPrinting = true;
+  const cancelBtn = document.getElementById('cancel-print-btn');
+  const printAllBtn = document.getElementById('print-all-btn');
+  cancelBtn.style.display = '';
+  printAllBtn.disabled = true;
+  printAllBtn.textContent = '⏳ Printing All…';
+
+  try {
+    for (let p = 0; p < state.allPackFaces.length; p++) {
+      if (state.isPrintingCanceled) break;
+      setPrintingIndicator(`Printing pack ${p + 1} of ${state.allPackFaces.length}…`);
+      await printPack(state.allPackFaces[p], state.allPackHeaders[p], null);
+    }
+
+    if (!state.isPrintingCanceled) {
+      setPrintingIndicator('All packs printed successfully!');
+      setTimeout(() => setPrintingIndicator(''), 4000);
+    }
+  } catch (err) {
+    if (!state.isPrintingCanceled) {
+      setPrintingIndicator(`Print error: ${err.message}`);
+      console.error(err);
+    }
+  } finally {
+    state.isPrinting = false;
+    cancelBtn.style.display = 'none';
+    printAllBtn.disabled = false;
+    printAllBtn.textContent = '🖨️ Print All Packs';
+  }
+}
+
+function cancelPrint() {
+  state.isPrintingCanceled = true;
+  setPrintingIndicator('⏹️ Print canceled by user.');
+  document.getElementById('cancel-print-btn').style.display = 'none';
+  setTimeout(() => {
+    if (!state.isPrinting) setPrintingIndicator('');
+  }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// THERMAL PRINT PREVIEW
+// ═══════════════════════════════════════════════════════════════
+async function toggleThermalPreview(enabled) {
+  state.thermalPreview = enabled;
+  const allItems = document.querySelectorAll('#packs-container .card-item, #tokens-container .card-item');
+  if (!allItems.length) return;
+
+  setPrintingIndicator(enabled ? 'Rendering thermal previews…' : 'Restoring card images…');
+  let processed = 0;
+
+  for (const item of allItems) {
+    const faces = item._faces;
+    if (!faces) continue;
+
+    const frontImg = item.querySelector('.card-front');
+    const backImg = item.querySelector('.card-back');
+
+    if (enabled) {
+      if (frontImg && !item._originalFrontSrc) item._originalFrontSrc = frontImg.src;
+      if (backImg && !item._originalBackSrc) item._originalBackSrc = backImg.src;
+
+      if (frontImg && faces[0]) {
+        try {
+          const canvas = await renderCardToCanvas(faces[0]);
+          frontImg.src = canvas.toDataURL('image/png');
+        } catch { /* keep original */ }
+      }
+      if (backImg && faces[1]) {
+        try {
+          const canvas = await renderCardToCanvas(faces[1]);
+          backImg.src = canvas.toDataURL('image/png');
+        } catch { /* keep original */ }
+      }
+    } else {
+      if (frontImg && item._originalFrontSrc) frontImg.src = item._originalFrontSrc;
+      if (backImg && item._originalBackSrc) backImg.src = item._originalBackSrc;
+    }
+
+    processed++;
+    if (processed % 20 === 0) {
+      setPrintingIndicator(`${enabled ? 'Rendering' : 'Restoring'} ${processed}/${allItems.length}…`);
+      await sleep(0); // yield to UI thread
+    }
+  }
+  setPrintingIndicator('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// QUICK PRINT (Single Card)
+// ═══════════════════════════════════════════════════════════════
+async function quickPrint() {
+  const input = document.getElementById('quick-print-input');
+  const name = (input?.value || '').trim();
+  if (!name) return;
+  if (!printerState.connected) {
+    alert('Connect a printer first.');
+    return;
+  }
+
+  setPrintingIndicator(`Fetching "${name}" from Scryfall…`);
+  const card = await fetchCardByName(name);
+  if (!card) {
+    setPrintingIndicator(`Card not found: "${name}"`);
+    setTimeout(() => setPrintingIndicator(''), 3000);
+    return;
+  }
+
+  const faces = parseScryfallCard(card);
+  state.isPrintingCanceled = false;
+
+  const groups = [];
+  let i = 0;
+  while (i < faces.length) {
+    const face = faces[i];
+    if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
+      groups.push([face, faces[i+1]]);
+      i += 2;
+    } else {
+      groups.push([face]);
+      i++;
+    }
+  }
+
+  for (const group of groups) {
+    for (let fi = 0; fi < group.length; fi++) {
+      await printCardFace(group[fi], fi === group.length - 1, true);
+    }
+  }
+
+  setPrintingIndicator(`Printed: ${card.name}`);
+  setTimeout(() => setPrintingIndicator(''), 3000);
+  input.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOCAL STORAGE PERSISTENCE
+// ═══════════════════════════════════════════════════════════════
+const LS_KEY = 'mtg_draft_settings';
+
+function saveSettings() {
+  const data = {
+    mode: state.mode,
+    numPacks: state.numPacks,
+    numDrafters: state.numDrafters,
+    includeTokens: state.includeTokens,
+    gangPrinting: document.getElementById('gang-print-toggle')?.checked || false,
+    setCode: document.getElementById('set-code-input')?.value || '',
+    cubeId: document.getElementById('cube-id-input')?.value || '',
+  };
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+
+    if (data.mode) {
+      state.mode = data.mode;
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === data.mode);
+      });
+      renderModeInputs(data.mode);
+    }
+    if (data.numPacks) {
+      state.numPacks = data.numPacks;
+      const el = document.getElementById('num-packs');
+      if (el) el.value = data.numPacks;
+    }
+    if (data.numDrafters) {
+      state.numDrafters = data.numDrafters;
+      const el = document.getElementById('num-drafters');
+      if (el) el.value = data.numDrafters;
+    }
+    if (data.includeTokens != null) {
+      state.includeTokens = data.includeTokens;
+      const el = document.getElementById('include-tokens');
+      if (el) el.checked = data.includeTokens;
+    }
+    if (data.gangPrinting != null) {
+      const el = document.getElementById('gang-print-toggle');
+      if (el) el.checked = data.gangPrinting;
+    }
+    // Set code / cube ID are restored when their mode panel renders
+    if (data.setCode && data.mode === 'set') {
+      setTimeout(() => {
+        const el = document.getElementById('set-code-input');
+        if (el) el.value = data.setCode;
+      }, 50);
+    }
+    if (data.cubeId && data.mode === 'cube') {
+      setTimeout(() => {
+        const el = document.getElementById('cube-id-input');
+        if (el) el.value = data.cubeId;
+      }, 50);
+    }
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KONAMI CODE EASTER EGG (↑↑↓↓←→←→)
+// ═══════════════════════════════════════════════════════════════
+function setupKonamiCode() {
+  const sequence = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight'];
+  const buffer = [];
+
+  document.addEventListener('keydown', (e) => {
+    buffer.push(e.key);
+    if (buffer.length > sequence.length) buffer.shift();
+
+    if (buffer.length === sequence.length && buffer.every((k, i) => k === sequence[i])) {
+      buffer.length = 0;
+      state.retroMode = !state.retroMode;
+      document.body.classList.toggle('retro', state.retroMode);
+
+      if (state.thermalPreview) {
+        toggleThermalPreview(true);
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // EVENT WIRING & INIT
 // ═══════════════════════════════════════════════════════════════
 function init() {
@@ -1572,11 +1916,13 @@ function init() {
       btn.classList.add('active');
       state.mode = btn.dataset.mode;
       renderModeInputs(state.mode);
+      saveSettings();
     });
   });
 
-    // Generate button
+  // Generate button
   document.getElementById('generate-btn').addEventListener('click', async () => {
+    saveSettings();
     await generateDraft();
   });
 
@@ -1595,8 +1941,37 @@ function init() {
     }
   });
 
-  // Init mode inputs
+  // Print All Packs
+  document.getElementById('print-all-btn').addEventListener('click', () => printAllPacks());
+
+  // Cancel Print
+  document.getElementById('cancel-print-btn').addEventListener('click', () => cancelPrint());
+
+  // Thermal Preview toggle
+  document.getElementById('thermal-preview-toggle').addEventListener('change', (e) => {
+    toggleThermalPreview(e.target.checked);
+  });
+
+  // Gang Print checkbox → save settings
+  document.getElementById('gang-print-toggle').addEventListener('change', () => saveSettings());
+
+  // Quick Print
+  document.getElementById('quick-print-btn').addEventListener('click', () => quickPrint());
+  document.getElementById('quick-print-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') quickPrint();
+  });
+
+  // Persist settings on form changes
+  document.getElementById('num-packs').addEventListener('change', () => saveSettings());
+  document.getElementById('num-drafters').addEventListener('change', () => saveSettings());
+  document.getElementById('include-tokens').addEventListener('change', () => saveSettings());
+
+  // Konami Code easter egg
+  setupKonamiCode();
+
+  // Restore saved settings then render mode inputs
   renderModeInputs('set');
+  loadSettings();
   showScreen('setup');
 }
 
@@ -1729,7 +2104,7 @@ async function renderCardToCanvas(face) {
   let manaW = ctx.measureText(mana).width;
 
   // DFC symbol width reservation
-  const dfcStr = face.dfcSide === 'front' ? '\u25b2' : face.dfcSide === 'back' ? '\u25bc' : '';
+  const dfcStr = face.dfcSide === 'front' ? (state.retroMode ? '[^]' : '\u25b2') : face.dfcSide === 'back' ? (state.retroMode ? '[v]' : '\u25bc') : '';
   let dfcW = dfcStr ? ctx.measureText(dfcStr).width + 8 : 0;
 
   while (ctx.measureText(face.name).width + manaW + dfcW + 10 > W && titleSize > 10) {
@@ -1779,51 +2154,95 @@ async function renderCardToCanvas(face) {
 
   const artH = Math.max(0, remaining - textHeight - 10);
 
-  // ── 3. Draw Art (fetch art_crop, enhance, dither) ──
+  // ── 3. Draw Art ──
   if (face.artCropUri && artH > 10) {
     try {
       const artImg = await loadImageForCanvas(face.artCropUri);
 
-      // Center-crop to fill artH (same crop logic as Python)
-      const artRatio = artImg.naturalWidth / artImg.naturalHeight;
-      const targetRatio = W / artH;
-      let sx, sy, sw, sh;
-      if (artRatio > targetRatio) {
-        sh = artImg.naturalHeight; sw = sh * targetRatio;
-        sy = 0; sx = (artImg.naturalWidth - sw) / 2;
+      if (state.retroMode) {
+        // ASCII dot-matrix rendering (ported from Python ASCII_MODE)
+        const asciiChars = ['@', '#', '8', '&', 'o', ':', '*', '.', ' '];
+        const asciFontSize = 14;
+        ctx.font = `${asciFontSize}px monospace`;
+        const charW = ctx.measureText('A').width || 8;
+        const charH = asciFontSize;
+        const cols = Math.floor(W / charW);
+        const rows = Math.floor(artH / charH);
+
+        if (cols > 0 && rows > 0) {
+          const sampleCanvas = document.createElement('canvas');
+          sampleCanvas.width = cols; sampleCanvas.height = rows;
+          const sCtx = sampleCanvas.getContext('2d');
+
+          const artRatio = artImg.naturalWidth / artImg.naturalHeight;
+          const targetRatio = cols / rows;
+          let sx, sy, sw, sh;
+          if (artRatio > targetRatio) {
+            sh = artImg.naturalHeight; sw = sh * targetRatio;
+            sy = 0; sx = (artImg.naturalWidth - sw) / 2;
+          } else {
+            sw = artImg.naturalWidth; sh = sw / targetRatio;
+            sx = 0; sy = (artImg.naturalHeight - sh) / 2;
+          }
+          sCtx.drawImage(artImg, sx, sy, sw, sh, 0, 0, cols, rows);
+
+          const sData = sCtx.getImageData(0, 0, cols, rows);
+          applyBrightness(sData, 1.4);
+          applyContrast(sData, 1.6);
+
+          ctx.fillStyle = 'black';
+          ctx.fillText('-'.repeat(cols), 0, y + asciFontSize);
+          let artY = y + charH;
+          for (let row = 0; row < rows; row++) {
+            let line = '';
+            for (let col = 0; col < cols; col++) {
+              const idx = (row * cols + col) * 4;
+              const gray = 0.299 * sData.data[idx] + 0.587 * sData.data[idx+1] + 0.114 * sData.data[idx+2];
+              const charIdx = Math.min(asciiChars.length - 1, Math.floor((gray / 255) * (asciiChars.length - 1)));
+              line += asciiChars[charIdx];
+            }
+            ctx.fillText(line, 0, artY + asciFontSize);
+            artY += charH;
+          }
+          ctx.fillText('-'.repeat(cols), 0, artY + asciFontSize);
+        }
       } else {
-        sw = artImg.naturalWidth; sh = sw / targetRatio;
-        sx = 0; sy = (artImg.naturalHeight - sh) / 2;
+        // Standard dithered rendering
+        const artRatio = artImg.naturalWidth / artImg.naturalHeight;
+        const targetRatio = W / artH;
+        let sx, sy, sw, sh;
+        if (artRatio > targetRatio) {
+          sh = artImg.naturalHeight; sw = sh * targetRatio;
+          sy = 0; sx = (artImg.naturalWidth - sw) / 2;
+        } else {
+          sw = artImg.naturalWidth; sh = sw / targetRatio;
+          sx = 0; sy = (artImg.naturalHeight - sh) / 2;
+        }
+
+        const artCanvas = document.createElement('canvas');
+        artCanvas.width = W; artCanvas.height = artH;
+        const artCtx = artCanvas.getContext('2d');
+        artCtx.drawImage(artImg, sx, sy, sw, sh, 0, 0, W, artH);
+
+        const artData = artCtx.getImageData(0, 0, W, artH);
+        applyBrightness(artData, 1.2);
+        applyContrast(artData, 1.1);
+
+        const dithered = floydSteinbergDither(artData);
+        const outData = artCtx.createImageData(W, artH);
+        for (let i = 0; i < dithered.length; i++) {
+          const v = dithered[i] ? 255 : 0;
+          outData.data[i*4] = v; outData.data[i*4+1] = v;
+          outData.data[i*4+2] = v; outData.data[i*4+3] = 255;
+        }
+        artCtx.putImageData(outData, 0, 0);
+        ctx.drawImage(artCanvas, 0, y);
+
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, y, W, artH);
       }
-
-      const artCanvas = document.createElement('canvas');
-      artCanvas.width = W; artCanvas.height = artH;
-      const artCtx = artCanvas.getContext('2d');
-      artCtx.drawImage(artImg, sx, sy, sw, sh, 0, 0, W, artH);
-
-      // Enhance: brightness 1.2, contrast 1.1 (matches Python fast_dither)
-      const artData = artCtx.getImageData(0, 0, W, artH);
-      applyBrightness(artData, 1.2);
-      applyContrast(artData, 1.1);
-
-      const dithered = floydSteinbergDither(artData);
-
-      // Write dithered pixels back (0=black, 1=white)
-      const outData = artCtx.createImageData(W, artH);
-      for (let i = 0; i < dithered.length; i++) {
-        const v = dithered[i] ? 255 : 0;
-        outData.data[i*4] = v; outData.data[i*4+1] = v;
-        outData.data[i*4+2] = v; outData.data[i*4+3] = 255;
-      }
-      artCtx.putImageData(outData, 0, 0);
-      ctx.drawImage(artCanvas, 0, y);
-
-      // Border around art (matches Python draw.rectangle)
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, y, W, artH);
     } catch {
-      // Fallback: placeholder box if CORS or load fails
       ctx.strokeStyle = 'black';
       ctx.lineWidth = 1;
       ctx.strokeRect(0, y, W, artH);
@@ -1854,49 +2273,68 @@ async function renderCardToCanvas(face) {
     }
   }
 
-  // ── 6. P/T Box (bottom-right, matches Python draw.rectangle) ──
+  // ── 6. P/T Box ──
   if (face.power != null && face.toughness != null) {
-    const ptStr = `${face.power} / ${face.toughness}`;
     ctx.font = 'bold 30px monospace';
-    const ptW = ctx.measureText(ptStr).width;
-    ctx.fillStyle = 'white';
-    ctx.fillRect(W - ptW - 16, H - 48, ptW + 16, 48);
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(W - ptW - 16, H - 48, ptW + 16, 48);
-    ctx.fillStyle = 'black';
-    ctx.fillText(ptStr, W - ptW - 8, H - 10);
+    if (state.retroMode) {
+      const ptStr = `[ ${face.power} / ${face.toughness} ]`;
+      const ptW = ctx.measureText(ptStr).width;
+      ctx.fillStyle = 'black';
+      ctx.fillText(ptStr, W - ptW - 8, H - 10);
+    } else {
+      const ptStr = `${face.power} / ${face.toughness}`;
+      const ptW = ctx.measureText(ptStr).width;
+      ctx.fillStyle = 'white';
+      ctx.fillRect(W - ptW - 16, H - 48, ptW + 16, 48);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(W - ptW - 16, H - 48, ptW + 16, 48);
+      ctx.fillStyle = 'black';
+      ctx.fillText(ptStr, W - ptW - 8, H - 10);
+    }
   }
 
-  // ── 7. Loyalty Shield (bottom-right, matches Python polygon) ──
+  // ── 7. Loyalty ──
   if (face.loyalty != null) {
-    const loyStr = String(face.loyalty);
     ctx.font = 'bold 30px monospace';
-    const loyW = ctx.measureText(loyStr).width;
-    const boxW = Math.max(loyW + 24, 48);
-    const boxH = 48;
+    if (state.retroMode) {
+      const loyStr = `{ ${face.loyalty} }`;
+      const loyW = ctx.measureText(loyStr).width;
+      let x0 = W - loyW - 8;
+      if (face.power != null && face.toughness != null) {
+        const ptStr = `[ ${face.power} / ${face.toughness} ]`;
+        x0 -= (ctx.measureText(ptStr).width + 16);
+      }
+      ctx.fillStyle = 'black';
+      ctx.fillText(loyStr, x0, H - 10);
+    } else {
+      const loyStr = String(face.loyalty);
+      const loyW = ctx.measureText(loyStr).width;
+      const boxW = Math.max(loyW + 24, 48);
+      const boxH = 48;
 
-    let x0 = W - boxW;
-    if (face.power != null && face.toughness != null) {
-      const ptW = ctx.measureText(`${face.power} / ${face.toughness}`).width;
-      x0 -= (ptW + 24);
+      let x0 = W - boxW;
+      if (face.power != null && face.toughness != null) {
+        const ptW = ctx.measureText(`${face.power} / ${face.toughness}`).width;
+        x0 -= (ptW + 24);
+      }
+      const y0 = H - boxH;
+
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + boxW, y0);
+      ctx.lineTo(x0 + boxW, H - 16);
+      ctx.lineTo(x0 + boxW / 2, H);
+      ctx.lineTo(x0, H - 16);
+      ctx.closePath();
+      ctx.fillStyle = 'white';
+      ctx.fill();
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'black';
+      ctx.fillText(loyStr, x0 + (boxW - loyW) / 2, y0 + 6 + 30);
     }
-    const y0 = H - boxH;
-
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x0 + boxW, y0);
-    ctx.lineTo(x0 + boxW, H - 16);
-    ctx.lineTo(x0 + boxW / 2, H);
-    ctx.lineTo(x0, H - 16);
-    ctx.closePath();
-    ctx.fillStyle = 'white';
-    ctx.fill();
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = 'black';
-    ctx.fillText(loyStr, x0 + (boxW - loyW) / 2, y0 + 6 + 30);
   }
 
   return canvas;
@@ -2073,11 +2511,16 @@ function setPrintingIndicator(msg) {
   if (status) status.textContent = msg;
 }
 
-/** Re-syncs all pack print buttons to current connection state */
+/** Re-syncs all pack print buttons and Print All button to current connection state */
 function updatePrinterUI() {
   document.querySelectorAll('.pack-print-btn').forEach(btn => {
     btn.disabled = !printerState.connected;
   });
+  const printAllBtn = document.getElementById('print-all-btn');
+  if (printAllBtn) {
+    printAllBtn.style.display = state.allPackFaces.length > 0 ? '' : 'none';
+    printAllBtn.disabled = !printerState.connected;
+  }
 }
 
 // ── PRINT JOBS ──
@@ -2086,21 +2529,30 @@ function updatePrinterUI() {
  * Render one card face, convert to ESC/POS, send to printer.
  * isLastFace=true triggers a full paper cut; false feeds a spacer (between DFC faces).
  */
-async function printCardFace(face, isLastFace) {
+async function printCardFace(face, isLastFace, isLastCardInPack = true) {
+  if (state.isPrintingCanceled) return;
+
   setPrintingIndicator(`Rendering ${face.name}…`);
   const cardCanvas  = await renderCardToCanvas(face);
   const printCanvas = processForPrint(cardCanvas);
   const escposData  = canvasToEscPosRaster(printCanvas);
 
+  if (state.isPrintingCanceled) return;
+
   setPrintingIndicator(`Sending ${face.name} to printer…`);
   await printerSend(escposData);
 
   if (isLastFace) {
-    // GS V B 0 — feed and full cut (matches Python printer.cut(feed=False))
-    await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00]));
-    await sleep(1500); // wait for mechanical cut
+    const gangPrint = document.getElementById('gang-print-toggle')?.checked;
+    if (gangPrint && !isLastCardInPack) {
+      // Gang mode: feed spacer instead of cutting between cards
+      await printerSend(new Uint8Array([0x1B, 0x4A, 0x14]));
+      await sleep(300);
+    } else {
+      await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00]));
+      await sleep(1500);
+    }
   } else {
-    // ESC J 20 — feed 20 dots spacer between DFC faces
     await printerSend(new Uint8Array([0x1B, 0x4A, 0x14]));
     await sleep(1000);
   }
@@ -2124,22 +2576,21 @@ async function printPack(faces, header, triggerBtn) {
   }
 
   try {
+    if (state.isPrintingCanceled) return;
     const enc = new TextEncoder();
 
-    // ── Pack header text (matches Python printer.text / printer.cut block) ──
-    await printerSend(new Uint8Array([0x1B, 0x40]));           // ESC @ reset
-    await printerSend(new Uint8Array([0x1f,0x1b,0x1f,0x01]));  // Speed 2
-    await printerSend(new Uint8Array([0x1f,0x1b,0x1f,0x0a]));  // Density 10
-    await printerSend(new Uint8Array([0x1B, 0x61, 0x01]));      // ESC a 1 — center
+    await printerSend(new Uint8Array([0x1B, 0x40]));
+    await printerSend(new Uint8Array([0x1f,0x1b,0x1f,0x01]));
+    await printerSend(new Uint8Array([0x1f,0x1b,0x1f,0x0a]));
+    await printerSend(new Uint8Array([0x1B, 0x61, 0x01]));
     await printerSend(enc.encode('\n================================\n'));
-    await printerSend(new Uint8Array([0x1B, 0x45, 0x01]));      // ESC E 1 — bold on
+    await printerSend(new Uint8Array([0x1B, 0x45, 0x01]));
     await printerSend(enc.encode(`--- ${header.title}: ${header.setName} ---\n`));
-    await printerSend(new Uint8Array([0x1B, 0x45, 0x00]));      // ESC E 0 — bold off
+    await printerSend(new Uint8Array([0x1B, 0x45, 0x00]));
     await printerSend(enc.encode('================================\n\n'));
-    await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00])); // cut
+    await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00]));
     await sleep(1000);
 
-    // ── Group DFC pairs (front+back) then single faces ──
     const groups = [];
     let i = 0;
     while (i < faces.length) {
@@ -2153,17 +2604,25 @@ async function printPack(faces, header, triggerBtn) {
       }
     }
 
-    for (const group of groups) {
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (state.isPrintingCanceled) break;
+      const group = groups[gi];
+      const isLastCard = gi === groups.length - 1;
       for (let fi = 0; fi < group.length; fi++) {
-        await printCardFace(group[fi], fi === group.length - 1);
+        if (state.isPrintingCanceled) break;
+        await printCardFace(group[fi], fi === group.length - 1, isLastCard);
       }
     }
 
-    setPrintingIndicator('Pack printed successfully!');
-    setTimeout(() => setPrintingIndicator(''), 3000);
+    if (!state.isPrintingCanceled) {
+      setPrintingIndicator('Pack printed successfully!');
+      setTimeout(() => setPrintingIndicator(''), 3000);
+    }
   } catch (err) {
-    setPrintingIndicator(`Print error: ${err.message}`);
-    console.error(err);
+    if (!state.isPrintingCanceled) {
+      setPrintingIndicator(`Print error: ${err.message}`);
+      console.error(err);
+    }
   } finally {
     if (triggerBtn) {
       triggerBtn.disabled = false;
