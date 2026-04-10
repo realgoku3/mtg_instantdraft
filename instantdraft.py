@@ -1254,7 +1254,7 @@ def main():
         
         print_card_list(list(global_tokens_dict.values()), printer)
 
-    print("\n🎉 Draft Machine Finished successfully!")
+    print("\n🎉 Draft Machine finished successfully!")
 
 if __name__ == "__main__":
     main()
