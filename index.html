@@ -2774,7 +2774,7 @@ function closeLightbox() {
   lightbox.current = -1;
 }
 
-function showLightboxCard(idx) {
+async function showLightboxCard(idx) {
   if (idx < 0 || idx >= lightbox.index.length) return;
   lightbox.current = idx;
   const entry = lightbox.index[idx];
@@ -2804,6 +2804,21 @@ function showLightboxCard(idx) {
     flipBtn.title = 'Flip card';
     flipBtn.addEventListener('click', (e) => { e.stopPropagation(); lightbox.inner.classList.toggle('flipped'); });
     lightbox.inner.appendChild(flipBtn);
+  }
+
+  if (state.thermalPreview) {
+    try {
+      const frontCanvas = await renderCardToCanvas(entry.faces[0]);
+      if (lightbox.current === idx) frontImg.src = frontCanvas.toDataURL('image/png');
+    } catch { /* keep original */ }
+
+    if (entry.faces.length > 1) {
+      try {
+        const backCanvas = await renderCardToCanvas(entry.faces[1]);
+        const backEl = lightbox.inner.querySelector('.card-back');
+        if (lightbox.current === idx && backEl) backEl.src = backCanvas.toDataURL('image/png');
+      } catch { /* keep original */ }
+    }
   }
 
   if (lightbox.caption) {
