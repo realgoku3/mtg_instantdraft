@@ -525,12 +525,117 @@
     ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--border); }
 
+    /* ── CARD LIGHTBOX ── */
+    .card-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      touch-action: pan-y;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card-lightbox.visible { opacity: 1; }
+    .card-lightbox-inner {
+      position: relative;
+      max-height: 50vh;
+      max-width: 90vw;
+      aspect-ratio: 488/680;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .card-lightbox-inner img {
+      width: 100%;
+      height: 100%;
+      max-height: 50vh;
+      object-fit: contain;
+      border-radius: 4.75%/3.5%;
+      box-shadow: 0 0 40px rgba(0,255,65,0.25);
+      display: block;
+    }
+    .card-lightbox-inner .card-back { display: none; }
+    .card-lightbox-inner.flipped .card-front { display: none; }
+    .card-lightbox-inner.flipped .card-back { display: block; }
+    .card-lightbox-nav {
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 1.6rem;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+      margin: 0 12px;
+    }
+    .card-lightbox-nav:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .card-lightbox-close {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 1.2rem;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      z-index: 10000;
+    }
+    .card-lightbox-close:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .card-lightbox-caption {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--text2);
+      font-size: 0.85rem;
+      font-family: inherit;
+      text-align: center;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .card-lightbox-flip {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      background: rgba(0,0,0,0.85);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      color: white;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .card-lightbox-flip:hover { background: rgba(0,255,65,0.8); color: #000; }
+
     /* ── RESPONSIVE ── */
     @media (max-width: 600px) {
       .app-header { padding: 32px 16px 24px; }
       #main-content { padding: 20px 14px 48px; }
       .mode-btn { font-size: 0.8rem; padding: 8px 10px; }
       .card-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+      .card-lightbox-inner { max-height: none; max-width: 100vw; width: 100vw; padding: 8px; }
+      .card-lightbox-inner img { max-height: none; width: 100%; height: auto; border-radius: 3%; }
+      .card-lightbox-nav { display: none; }
     }
   </style>
 </head>
@@ -548,7 +653,6 @@
       <div class="mode-selector" id="mode-selector">
         <button class="mode-btn active" data-mode="set">Set Draft</button>
         <button class="mode-btn" data-mode="chaos">Chaos</button>
-        <button class="mode-btn" data-mode="jumpstart">Jumpstart</button>
         <button class="mode-btn" data-mode="block">Block</button>
         <button class="mode-btn" data-mode="cube">Cube</button>
       </div>
@@ -1012,52 +1116,6 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// JUMPSTART PACK BUILDER
-// ═══════════════════════════════════════════════════════════════
-async function buildJumpstartPack() {
-  const colorDefs = [
-    ['W', 'Plains', 'White'],
-    ['U', 'Island', 'Blue'],
-    ['B', 'Swamp', 'Black'],
-    ['R', 'Mountain', 'Red'],
-    ['G', 'Forest', 'Green'],
-  ];
-  const [cCode, basicName, cName] = colorDefs[Math.floor(Math.random() * colorDefs.length)];
-  const themeName = `Jumpstart: ${cName}`;
-
-  setStatus(`Fetching ${cName} cards from all Jumpstart sets...`);
-  const cards = await fetchCardsForQuery(`st:jumpstart id<=${cCode} -t:basic -is:digital`);
-
-  const pools = { C: [], U: [], R: [], M: [] };
-  for (const c of cards) {
-    const r = c.rarity || 'common';
-    (pools[r[0].toUpperCase()] || pools.C).push(c);
-  }
-
-  const rand = () => Math.random();
-  function pick(key) {
-    const pool = pools[key] || pools.C;
-    return pool.length ? pool[Math.floor(rand() * pool.length)] : null;
-  }
-
-  const pack = [];
-  // Jumpstart formula: 1 R/M, 4 U, 7 C, 8 basics
-  const rCard = (rand() < 0.2 && pools.M.length) ? pick('M') : pick('R');
-  if (rCard) pack.push(rCard);
-  for (let i = 0; i < 4; i++) pack.push(pick('U'));
-  for (let i = 0; i < 7; i++) pack.push(pick('C'));
-
-  setStatus(`Fetching ${basicName} basics from Jumpstart...`);
-  let basics = await fetchCardsForQuery(`t:basic name:${basicName} st:jumpstart -is:digital`);
-  if (!basics.length) basics = await fetchCardsForQuery(`t:basic name:${basicName}`);
-  if (basics.length) {
-    for (let i = 0; i < 8; i++) pack.push(basics[Math.floor(rand() * basics.length)]);
-  }
-
-  return { pack: pack.filter(Boolean), themeName };
-}
-
-// ═══════════════════════════════════════════════════════════════
 // CARD PARSING  (mirrors Python parse_scryfall_card)
 // ═══════════════════════════════════════════════════════════════
 function formatMana(text) {
@@ -1302,16 +1360,27 @@ function renderPackBlock(header, cards) {
   const grid = document.createElement('div');
   grid.className = 'card-grid';
 
+  const packIdx = state.allPackFaces.length - 1;
   let i = 0;
+  let cardGroupIdx = 0;
   while (i < cards.length) {
     const face = cards[i];
+    let el;
     if (face.isDFC && face.dfcSide === 'front' && cards[i + 1]?.dfcSide === 'back') {
-      grid.appendChild(buildDFCElement(face, cards[i + 1]));
+      el = buildDFCElement(face, cards[i + 1]);
       i += 2;
     } else {
-      grid.appendChild(buildCardElement(face));
+      el = buildCardElement(face);
       i++;
     }
+    const capturedIdx = cardGroupIdx;
+    const capturedPack = packIdx;
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.flip-btn')) return;
+      openLightbox(capturedPack, capturedIdx);
+    });
+    grid.appendChild(el);
+    cardGroupIdx++;
   }
 
   block.appendChild(grid);
@@ -1426,10 +1495,6 @@ async function generateDraft() {
       draftSequence = Array(state.numPacks).fill('cube');
       titleStr = `Cube Draft -- ${state.cubeId || 'Pasted List'}`;
 
-    } else if (state.mode === 'jumpstart') {
-      draftSequence = Array(state.numPacks).fill('jumpstart');
-      titleStr = 'Jumpstart Draft';
-
     } else if (state.mode === 'chaos') {
       validChaosSets = await getAllChaosSets();
       if (!validChaosSets.length) {
@@ -1472,13 +1537,7 @@ async function generateDraft() {
       let packCards = [];
       let header = {};
 
-      if (currentCode === 'jumpstart') {
-        setStatus(`Rolling Jumpstart packet ${packIdx + 1} of ${total}...`);
-        const { pack, themeName } = await buildJumpstartPack();
-        packCards = pack;
-        header = { title: `Packet ${packIdx + 1}`, setName: themeName, type: 'Jumpstart' };
-
-      } else if (currentCode === 'cube') {
+      if (currentCode === 'cube') {
         header = { title: `Pack ${packIdx + 1}`, setName: `Cube: ${state.cubeId}`, type: 'Cube Pack' };
         setStatus(`Drawing cube pack ${packIdx + 1} of ${total}...`);
 
@@ -1599,12 +1658,6 @@ function renderModeInputs(mode) {
     container.innerHTML = `
       <div class="form-group">
         <p class="hint" style="font-size:0.9rem;color:var(--text2)">Each pack comes from a different random draftable set. No duplicates.</p>
-      </div>`;
-
-  } else if (mode === 'jumpstart') {
-    container.innerHTML = `
-      <div class="form-group">
-        <p class="hint" style="font-size:0.9rem;color:var(--text2)">Each packet: 1 Rare/Mythic, 4 Uncommons, 7 Commons, 8 Basic Lands -- all single-color aligned.</p>
       </div>`;
 
   } else if (mode === 'block') {
@@ -1981,6 +2034,9 @@ function init() {
 
   // Konami Code easter egg
   setupKonamiCode();
+
+  // Card lightbox keyboard navigation
+  setupLightboxKeys();
 
   // Restore saved settings then render mode inputs
   renderModeInputs('set');
@@ -2658,6 +2714,175 @@ async function printPack(faces, header, triggerBtn) {
       triggerBtn.textContent = 'Print Pack';
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CARD LIGHTBOX -- enlarged card view with arrow-key / swipe nav
+// ═══════════════════════════════════════════════════════════════
+const lightbox = {
+  el: null,
+  inner: null,
+  caption: null,
+  index: [],       // flat list of {faces: [face,...], packIdx, label}
+  current: -1,
+  touchStartX: 0,
+  touchStartY: 0,
+};
+
+function buildLightboxIndex() {
+  lightbox.index = [];
+  for (let p = 0; p < state.allPackFaces.length; p++) {
+    const faces = state.allPackFaces[p];
+    const hdr = state.allPackHeaders[p];
+    let i = 0;
+    while (i < faces.length) {
+      const face = faces[i];
+      if (face.isDFC && face.dfcSide === 'front' && faces[i + 1]?.dfcSide === 'back') {
+        lightbox.index.push({ faces: [face, faces[i + 1]], packIdx: p, label: `${hdr.title} · ${hdr.setName}` });
+        i += 2;
+      } else {
+        lightbox.index.push({ faces: [face], packIdx: p, label: `${hdr.title} · ${hdr.setName}` });
+        i++;
+      }
+    }
+  }
+}
+
+function openLightbox(packIdx, cardIdxInPack) {
+  buildLightboxIndex();
+  if (!lightbox.index.length) return;
+
+  let globalIdx = 0;
+  let count = 0;
+  for (let i = 0; i < lightbox.index.length; i++) {
+    if (lightbox.index[i].packIdx === packIdx) {
+      if (count === cardIdxInPack) { globalIdx = i; break; }
+      count++;
+    }
+  }
+
+  if (!lightbox.el) createLightboxDOM();
+  document.body.appendChild(lightbox.el);
+  showLightboxCard(globalIdx);
+  requestAnimationFrame(() => lightbox.el.classList.add('visible'));
+}
+
+function closeLightbox() {
+  if (!lightbox.el) return;
+  lightbox.el.classList.remove('visible');
+  setTimeout(() => { if (lightbox.el?.parentNode) lightbox.el.parentNode.removeChild(lightbox.el); }, 200);
+  lightbox.current = -1;
+}
+
+function showLightboxCard(idx) {
+  if (idx < 0 || idx >= lightbox.index.length) return;
+  lightbox.current = idx;
+  const entry = lightbox.index[idx];
+
+  if (!lightbox.inner) return;
+  lightbox.inner.innerHTML = '';
+  lightbox.inner.classList.remove('flipped');
+
+  const frontImg = document.createElement('img');
+  frontImg.className = 'card-front';
+  frontImg.src = entry.faces[0].imageUri || '';
+  frontImg.alt = entry.faces[0].name;
+  frontImg.draggable = false;
+  lightbox.inner.appendChild(frontImg);
+
+  if (entry.faces.length > 1) {
+    const backImg = document.createElement('img');
+    backImg.className = 'card-back';
+    backImg.src = entry.faces[1].imageUri || '';
+    backImg.alt = entry.faces[1].name;
+    backImg.draggable = false;
+    lightbox.inner.appendChild(backImg);
+
+    const flipBtn = document.createElement('button');
+    flipBtn.className = 'card-lightbox-flip';
+    flipBtn.textContent = '↔';
+    flipBtn.title = 'Flip card';
+    flipBtn.addEventListener('click', (e) => { e.stopPropagation(); lightbox.inner.classList.toggle('flipped'); });
+    lightbox.inner.appendChild(flipBtn);
+  }
+
+  if (lightbox.caption) {
+    const cardName = entry.faces[0].name + (entry.faces.length > 1 ? ' // ' + entry.faces[1].name : '');
+    lightbox.caption.textContent = `${cardName}  ·  ${entry.label}`;
+  }
+}
+
+function lightboxNav(delta) {
+  if (lightbox.current < 0) return;
+  let next = lightbox.current + delta;
+  if (next >= lightbox.index.length) next = 0;
+  if (next < 0) next = lightbox.index.length - 1;
+  showLightboxCard(next);
+}
+
+function createLightboxDOM() {
+  const overlay = document.createElement('div');
+  overlay.className = 'card-lightbox';
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target === wrap) closeLightbox();
+  });
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;';
+  overlay.appendChild(wrap);
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'card-lightbox-nav prev';
+  prevBtn.textContent = '‹';
+  prevBtn.addEventListener('click', (e) => { e.stopPropagation(); lightboxNav(-1); });
+  wrap.appendChild(prevBtn);
+
+  const inner = document.createElement('div');
+  inner.className = 'card-lightbox-inner';
+  wrap.appendChild(inner);
+  lightbox.inner = inner;
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'card-lightbox-nav next';
+  nextBtn.textContent = '›';
+  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); lightboxNav(1); });
+  wrap.appendChild(nextBtn);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'card-lightbox-close';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', closeLightbox);
+  overlay.appendChild(closeBtn);
+
+  const caption = document.createElement('div');
+  caption.className = 'card-lightbox-caption';
+  overlay.appendChild(caption);
+  lightbox.caption = caption;
+
+  // Touch swipe handling
+  overlay.addEventListener('touchstart', (e) => {
+    lightbox.touchStartX = e.changedTouches[0].clientX;
+    lightbox.touchStartY = e.changedTouches[0].clientY;
+  }, { passive: true });
+
+  overlay.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - lightbox.touchStartX;
+    const dy = e.changedTouches[0].clientY - lightbox.touchStartY;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      lightboxNav(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+
+  lightbox.el = overlay;
+}
+
+function setupLightboxKeys() {
+  document.addEventListener('keydown', (e) => {
+    if (lightbox.current < 0) return;
+    if (e.key === 'Escape') { closeLightbox(); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { lightboxNav(1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft') { lightboxNav(-1); e.preventDefault(); }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
