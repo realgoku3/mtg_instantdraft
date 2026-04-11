@@ -10,10 +10,10 @@
       --bg: #000000;
       --bg2: #001100;
       --bg3: #001a00;
-      --border: #003300;
+      --border: #006600;
       --text: #00ff41;
       --text2: #00aa00;
-      --text3: #005500;
+      --text3: #009900;
       --accent: #00ff41;
       --accent-dim: rgba(0,255,65,0.1);
       --accent-glow: rgba(0,255,65,0.3);
@@ -251,7 +251,17 @@
       padding: 6px 0;
       margin-bottom: 0;
     }
-    .toggle-row input[type=checkbox] { display: none; }
+    .toggle-row input[type=checkbox] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .toggle-track {
       display: inline-block;
       width: 40px; height: 22px;
@@ -371,6 +381,36 @@
       margin: 0 auto 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Flavor text during loading */
+    .flavor-container {
+      margin-top: 28px;
+      min-height: 3.6em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .flavor-text {
+      font-style: italic;
+      color: var(--text3);
+      font-size: 0.88rem;
+      line-height: 1.6;
+      max-width: 440px;
+      text-align: center;
+      white-space: pre-wrap;
+    }
+    .flavor-text.fade-in {
+      animation: flavorFadeIn 0.6s ease forwards;
+    }
+    @keyframes flavorFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .flavor-char {
+      display: inline-block;
+      transition: none;
+      white-space: pre;
+    }
 
     /* ── RESULTS ── */
     .results-header {
@@ -740,20 +780,91 @@
       .card-lightbox-inner img { max-height: none; width: 100%; height: auto; border-radius: 3%; }
       .card-lightbox-nav { display: none; }
     }
+
+    /* ── SKIP LINK (WCAG 2.4.1) ── */
+    .skip-link {
+      position: absolute;
+      top: -60px;
+      left: 0;
+      background: var(--accent);
+      color: #000;
+      padding: 8px 16px;
+      z-index: 10001;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: top 0.2s;
+    }
+    .skip-link:focus { top: 0; }
+
+    /* ── FOCUS INDICATORS (WCAG 2.4.7) ── */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .btn-primary:focus-visible {
+      outline-color: #fff;
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.4);
+    }
+    .card-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      z-index: 2;
+    }
+    .block-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+    .pack-header:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* ── SCREEN READER ONLY ── */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ── REDUCED MOTION (WCAG 2.3.3) ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      html { scroll-behavior: auto; }
+      .card-item:hover { transform: none; }
+    }
   </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
 <div id="app">
   <header class="app-header">
     <h1 class="app-title">Instant Draft Machine</h1>
     <p class="app-subtitle">Generate authentic booster packs from any set</p>
-    <button class="help-btn" id="help-btn" title="How to use this site">?</button>
+    <button class="help-btn" id="help-btn" aria-label="Help — how to use this site" aria-expanded="false" aria-controls="help-overlay">?</button>
   </header>
 
-  <div class="help-overlay" id="help-overlay">
+  <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="How to use this site" aria-hidden="true">
     <div class="help-modal">
-      <button class="help-modal-close" id="help-modal-close">✕</button>
+      <button class="help-modal-close" id="help-modal-close" aria-label="Close help dialog">✕</button>
       <h2>How to Use</h2>
       <p><strong>Set Draft</strong> — Enter a set code (e.g. <code>dsk</code>, <code>lci</code>, <code>mh3</code>) and the number of packs to open. The machine builds a full card pool from Scryfall and rolls authentic boosters with correct rarity distributions, bonus sheets, and special slots.</p>
       <p><strong>Chaos Draft</strong> — Each pack comes from a different random draftable set. Great for wild, unpredictable games.</p>
@@ -768,11 +879,11 @@
   <main id="main-content">
     <!-- SETUP -->
     <section id="setup-screen">
-      <div class="mode-selector" id="mode-selector">
-        <button class="mode-btn active" data-mode="set">Set Draft</button>
-        <button class="mode-btn" data-mode="chaos">Chaos</button>
-        <button class="mode-btn" data-mode="block">Block</button>
-        <button class="mode-btn" data-mode="cube">Cube</button>
+      <div class="mode-selector" id="mode-selector" role="group" aria-label="Draft mode">
+        <button class="mode-btn active" data-mode="set" aria-pressed="true">Set Draft</button>
+        <button class="mode-btn" data-mode="chaos" aria-pressed="false">Chaos</button>
+        <button class="mode-btn" data-mode="block" aria-pressed="false">Block</button>
+        <button class="mode-btn" data-mode="cube" aria-pressed="false">Cube</button>
       </div>
 
       <div class="setup-card">
@@ -809,14 +920,14 @@
           <p class="hint" style="margin-top: 2px;">Type any card name to fetch and print it instantly.</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;">
+          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
           <button class="btn-secondary" id="setup-quick-print-btn" style="white-space: nowrap;">Print Card</button>
           <button class="btn-secondary" id="setup-printer-connect-btn">Connect Printer</button>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
           <div class="printer-dot" id="setup-printer-dot"></div>
           <span class="printer-label" id="setup-printer-label" style="font-size: 0.82rem;">No printer connected</span>
-          <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;"></span>
+          <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;" aria-live="polite"></span>
         </div>
       </div>
 
@@ -826,20 +937,23 @@
           <p class="hint" style="margin-top: 2px;">Paste a list to print. Format: <code>[qty] [card] [set] [collector num]</code></p>
         </div>
         <div class="form-group" style="margin-bottom: 12px;">
-          <textarea id="print-list-input" placeholder="Paste your card list here..." style="min-height: 130px; font-size: 0.82rem;"></textarea>
+          <textarea id="print-list-input" placeholder="Paste your card list here..." style="min-height: 130px; font-size: 0.82rem;" aria-label="Card list to print"></textarea>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <button class="btn-secondary" id="print-list-btn" style="white-space: nowrap;">Load List</button>
-          <span class="printer-status-text" id="print-list-status" style="font-size: 0.78rem;"></span>
+          <span class="printer-status-text" id="print-list-status" style="font-size: 0.78rem;" aria-live="polite"></span>
         </div>
       </div>
     </section>
 
     <!-- PROGRESS -->
-    <div id="progress-section" style="display:none">
-      <div class="progress-spinner"></div>
-      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <div id="progress-section" style="display:none" aria-live="polite">
+      <div class="progress-spinner" role="img" aria-label="Loading"></div>
+      <div class="progress-track" role="progressbar" id="progress-track" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Draft generation progress"><div class="progress-fill" id="progress-fill"></div></div>
       <p id="progress-text">Preparing...</p>
+      <div class="flavor-container">
+        <div class="flavor-text" id="flavor-text"></div>
+      </div>
     </div>
 
     <!-- RESULTS -->
@@ -847,6 +961,7 @@
       <div class="results-header">
         <h2 class="results-title" id="results-title">Draft Complete</h2>
         <div class="results-actions">
+          <button class="btn-secondary" id="expand-all-btn">▼ Expand All</button>
           <button class="btn-secondary" id="print-all-btn" style="display:none">Print All Packs</button>
           <button class="btn-cancel-print" id="cancel-print-btn" style="display:none">Cancel Print</button>
           <label class="thermal-toggle-wrap toggle-row" title="Preview cards as they would appear on thermal printer">
@@ -860,21 +975,25 @@
       <div id="printer-bar" class="printer-bar" style="display:none">
         <div class="printer-dot" id="printer-dot"></div>
         <span class="printer-label" id="printer-label">No printer connected</span>
-        <span class="printer-status-text" id="printer-status-text"></span>
+        <span class="printer-status-text" id="printer-status-text" aria-live="polite"></span>
         <div class="gang-print-row">
           <input type="checkbox" id="gang-print-toggle">
           <label for="gang-print-toggle">Gang Print (no cuts)</label>
         </div>
         <div class="quick-print-row">
-          <input type="text" id="quick-print-input" placeholder="Quick print card..." spellcheck="false">
+          <input type="text" id="quick-print-input" placeholder="Quick print card..." spellcheck="false" aria-label="Card name to quick print">
           <button class="btn-printer-connect" id="quick-print-btn" title="Fetch and print single card">Print</button>
         </div>
         <button class="btn-printer-connect" id="connect-printer-btn">Connect Printer</button>
       </div>
-      <div id="error-banner"></div>
+      <div id="error-banner" role="alert" aria-live="assertive"></div>
       <div id="packs-container"></div>
-      <div id="tokens-section" style="display:none">
-        <h2 class="section-title">🃏 Associated Tokens</h2>
+      <div id="tokens-section" class="pack-block" style="display:none">
+        <div class="pack-header" id="tokens-header" tabindex="0" role="button" aria-expanded="false">
+          <span class="pack-chevron">►</span>
+          <span class="pack-title">Tokens</span>
+          <span class="pack-badge" id="tokens-count"></span>
+        </div>
         <div id="tokens-container" class="card-grid"></div>
       </div>
     </section>
@@ -1023,13 +1142,31 @@ async function getCubeList(cubeId) {
   return null;
 }
 
+const CHAOS_EXCLUDED_SETS = new Set([
+  'plst',  // The List — reprints inserted in other boosters, not a standalone product
+  'ren',   // Renaissance — reprint product for European markets
+  'rin',   // Rinascimento — Italian Renaissance
+  'chr',   // Chronicles — all-reprint packs, not designed for draft
+  'mat',   // March of the Machine: The Aftermath — 5-card Epilogue Boosters only
+  'dbl',   // Innistrad: Double Feature — combined reprint set
+  'jmp',   // Jumpstart — theme packs, not draft boosters
+  'j22',   // Jumpstart 2022
+]);
+
 async function getAllChaosSets() {
   setStatus('Fetching valid sets for Chaos Draft...');
   const res = await rateLimitedGet('https://api.scryfall.com/sets');
   if (res && res.status === 200) {
     const data = await res.json();
     const validTypes = new Set(['core', 'expansion', 'masters', 'draft_innovation']);
-    return data.data.filter(s => validTypes.has(s.set_type)).map(s => s.code);
+    return data.data
+      .filter(s =>
+        validTypes.has(s.set_type) &&
+        !s.digital &&
+        !s.parent_set_code &&
+        !CHAOS_EXCLUDED_SETS.has(s.code)
+      )
+      .map(s => s.code);
   }
   return [];
 }
@@ -1351,10 +1488,154 @@ const state = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// FLAVOR TEXT CYCLE  (burn-out effect adapted from manaburn.net)
+// ═══════════════════════════════════════════════════════════════
+const FLAVOR_TEXTS = [
+  { text: '"The dark won\'t hurt you. What\'s in the dark, however..."', source: 'Duskmourn' },
+  { text: '"Of course you should fight fire with fire. You should fight everything with fire."', source: 'Jaya Ballard, Task Mage' },
+  { text: '"The meek shall inherit the earth — six feet of it."', source: 'Enslave' },
+  { text: '"I have seen the end of all things, and I would do it all again."', source: 'Elesh Norn' },
+  { text: '"I want a nice, clean fight!"', source: 'Arena' },
+  { text: '"Let my epitaph be this: his lies, my fire."', source: 'Jaya Ballard' },
+  { text: '"Enter and join the dead in their decadent paradise."', source: 'Orzhov Basilica' },
+  { text: '"Don\'t mourn for me. This is my gift to you."', source: 'Selfless Spirit' },
+  { text: '"Ach! Hans, run! It\'s the Lhurgoyf!"', source: 'Saffi Eriksdotter, last words' },
+  { text: '"Blood is the paint, the world is the canvas."', source: 'Hemorrhage' },
+  { text: '"The earth shattered, and from it bloomed a terrible beauty."', source: 'Marit Lage' },
+  { text: '"The flesh is but a vessel. The mind is what I consume."', source: 'Ashiok' },
+  { text: '"You may say I\'m a dreamer, but I\'m not."', source: 'Ertai, the Corrupted' },
+  { text: '"Pain is just information."', source: 'Karn' },
+  { text: '"I have seen worlds die. It never stops being beautiful."', source: 'Nicol Bolas' },
+  { text: '"Fear not the lightning. Fear the one who calls it."', source: 'Ral Zarek' },
+  { text: '"The only constant in the multiverse is upheaval."', source: 'Teferi' },
+  { text: '"The grave is nature\'s way of telling you your time is up."', source: 'Deadbridge Chant' },
+  { text: '"I\'ve come too far to die here."', source: 'Gideon Jura' },
+  { text: '"Greatness, at any cost."', source: 'Dark Confidant' },
+  { text: '"Anything that can be conceived can be achieved."', source: 'Urza' },
+  { text: '"It doesn\'t think. It doesn\'t feel. It doesn\'t laugh or cry. All it does, from dusk till dawn, is make the soldiers die."', source: 'Phyrexian Hulk' },
+  { text: '"I am the voice of the past that will always be."', source: 'Spirit of the Night' },
+  { text: '"The quickest way to a man\'s heart is through his chest."', source: 'Hidetsugu' },
+  { text: '"Even the small can be mighty."', source: 'Mother of Runes' },
+  { text: '"In the swamp, there is no beauty. There is power."', source: 'Liliana Vess' },
+  { text: '"There is always a greater power."', source: 'Ugin' },
+  { text: '"Rage is the only language the multiverse truly understands."', source: 'Sarkhan Vol' },
+  { text: '"To the living we owe respect, but to the dead we owe only the truth."', source: 'Cemetery Reaper' },
+  { text: '"Some have said there is no subtlety to destruction. You know what? They\'re dead."', source: 'Jaya Ballard, Task Mage' },
+];
+
+const BURN_CHARS = [' ', '.', ',', ':', ';', '=', '+', '*', '?', '%', '#', '@'];
+const BURN_CYCLE_MS = 6000;
+const BURN_STAGGER_MS = 400;
+const BURN_CHAR_MS = 350;
+
+let flavorInterval = null;
+let flavorBurnFrame = null;
+let flavorIdx = -1;
+
+function startFlavorCycle() {
+  if (flavorInterval) return;
+  const el = document.getElementById('flavor-text');
+  if (!el) return;
+  shuffleArray(FLAVOR_TEXTS);
+  flavorIdx = -1;
+  showNextFlavor(el, true);
+  flavorInterval = setInterval(() => burnOutFlavor(el), BURN_CYCLE_MS);
+}
+
+function stopFlavorCycle() {
+  if (flavorInterval) { clearInterval(flavorInterval); flavorInterval = null; }
+  if (flavorBurnFrame) { cancelAnimationFrame(flavorBurnFrame); flavorBurnFrame = null; }
+  const el = document.getElementById('flavor-text');
+  if (el) { el.innerHTML = ''; el.classList.remove('fade-in'); }
+  flavorIdx = -1;
+}
+
+function showNextFlavor(el, instant) {
+  flavorIdx++;
+  if (flavorIdx >= FLAVOR_TEXTS.length) {
+    shuffleArray(FLAVOR_TEXTS);
+    flavorIdx = 0;
+  }
+  const f = FLAVOR_TEXTS[flavorIdx];
+  el.textContent = `${f.text}\n— ${f.source}`;
+  el.classList.remove('fade-in');
+  if (!instant) {
+    void el.offsetWidth;
+    el.classList.add('fade-in');
+  }
+}
+
+function burnOutFlavor(container) {
+  const text = container.textContent;
+  if (!text) { showNextFlavor(container, false); return; }
+
+  container.innerHTML = '';
+  const chars = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\n') {
+      container.appendChild(document.createElement('br'));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'flavor-char';
+    span.textContent = ch;
+    container.appendChild(span);
+
+    if (ch !== ' ') {
+      chars.push({
+        el: span,
+        orig: ch,
+        delay: Math.random() * BURN_STAGGER_MS,
+        dur: BURN_CHAR_MS + (Math.random() - 0.5) * 120,
+        floatY: -(14 + Math.random() * 18),
+        driftX: (Math.random() - 0.5) * 8,
+        progress: 0,
+      });
+    }
+  }
+
+  const start = performance.now();
+
+  function tick(now) {
+    const elapsed = now - start;
+    let allDone = true;
+
+    for (const c of chars) {
+      const t = Math.max(0, elapsed - c.delay);
+      c.progress = Math.min(1, t / c.dur);
+
+      if (c.progress < 1) allDone = false;
+      if (c.progress === 0) continue;
+
+      const burnIdx = Math.max(0, Math.round((BURN_CHARS.length - 1) * (1 - c.progress)));
+      const burnChar = c.progress > 0.08 ? BURN_CHARS[burnIdx] : c.orig;
+      if (c.el.textContent !== burnChar) c.el.textContent = burnChar;
+
+      const p = c.progress;
+      c.el.style.transform = `translateY(${c.floatY * p}px) translateX(${c.driftX * p}px)`;
+      c.el.style.opacity = (1 - p * p).toFixed(2);
+    }
+
+    if (allDone) {
+      flavorBurnFrame = null;
+      showNextFlavor(container, false);
+    } else {
+      flavorBurnFrame = requestAnimationFrame(tick);
+    }
+  }
+
+  flavorBurnFrame = requestAnimationFrame(tick);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════
 function setProgress(pct) {
   document.getElementById('progress-fill').style.width = `${pct}%`;
+  const track = document.getElementById('progress-track');
+  if (track) track.setAttribute('aria-valuenow', String(Math.round(pct)));
 }
 
 function setStatus(msg) {
@@ -1366,9 +1647,9 @@ function showScreen(name) {
   document.getElementById('setup-screen').style.display = name === 'setup' ? '' : 'none';
   document.getElementById('progress-section').style.display = name === 'progress' ? '' : 'none';
   document.getElementById('results-section').style.display = name === 'results' ? '' : 'none';
-  // Show printer bar only on results screen; hide on others
   const printerBar = document.getElementById('printer-bar');
   if (printerBar) printerBar.style.display = name === 'results' ? '' : 'none';
+  if (name === 'progress') startFlavorCycle(); else stopFlavorCycle();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1444,6 +1725,7 @@ function buildDFCElement(frontFace, backFace) {
   flipBtn.className = 'flip-btn';
   flipBtn.textContent = '↔';
   flipBtn.title = 'Flip card';
+  flipBtn.setAttribute('aria-label', `Flip ${frontFace.name}`);
   flipBtn.addEventListener('click', e => {
     e.stopPropagation();
     item.classList.toggle('flipped');
@@ -1470,11 +1752,23 @@ function renderPackBlock(header, cards) {
     <span class="pack-badge">${cards.length} cards</span>
   `;
 
+  ph.setAttribute('tabindex', '0');
+  ph.setAttribute('role', 'button');
+  ph.setAttribute('aria-expanded', 'false');
+  const togglePack = () => {
+    block.classList.toggle('expanded');
+    const isExpanded = block.classList.contains('expanded');
+    ph.setAttribute('aria-expanded', String(isExpanded));
+    const chevron = ph.querySelector('.pack-chevron');
+    if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
+  };
   ph.addEventListener('click', (e) => {
     if (e.target.closest('.pack-print-btn')) return;
-    block.classList.toggle('expanded');
-    const chevron = ph.querySelector('.pack-chevron');
-    if (chevron) chevron.textContent = block.classList.contains('expanded') ? '▼' : '►';
+    togglePack();
+  });
+  ph.addEventListener('keydown', (e) => {
+    if (e.target.closest('.pack-print-btn')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePack(); }
   });
 
   const printBtn = document.createElement('button');
@@ -1505,11 +1799,17 @@ function renderPackBlock(header, cards) {
       el = buildCardElement(face);
       i++;
     }
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'button');
     const capturedIdx = cardGroupIdx;
     const capturedPack = packIdx;
-    el.addEventListener('click', (e) => {
+    const openCard = (e) => {
       if (e.target.closest('.flip-btn')) return;
       openLightbox(capturedPack, capturedIdx);
+    };
+    el.addEventListener('click', openCard);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard(e); }
     });
     grid.appendChild(el);
     cardGroupIdx++;
@@ -1730,6 +2030,7 @@ async function generateDraft() {
 
       done++;
       setProgress(Math.round((done / total) * 100));
+      await sleep(0);
     }
 
     // ── All data ready — transition to results ──
@@ -1745,15 +2046,25 @@ async function generateDraft() {
       packsContainer.appendChild(packBlock);
     }
 
-    // Render tokens
+    // Render tokens (collapsed by default, like packs)
     if (state.includeTokens && Object.keys(globalTokens).length) {
-      document.getElementById('tokens-section').style.display = '';
+      const tSection = document.getElementById('tokens-section');
+      tSection.style.display = '';
+      tSection.classList.remove('expanded');
+      const tHeader = document.getElementById('tokens-header');
+      if (tHeader) tHeader.setAttribute('aria-expanded', 'false');
+      const tChevron = tSection.querySelector('.pack-chevron');
+      if (tChevron) tChevron.textContent = '►';
+      let tokenCount = 0;
       for (const tokenData of Object.values(globalTokens)) {
         const faces = parseScryfallCard(tokenData);
         if (faces[0]) {
           tokensContainer.appendChild(buildCardElement(faces[0]));
+          tokenCount++;
         }
       }
+      const countBadge = document.getElementById('tokens-count');
+      if (countBadge) countBadge.textContent = `${tokenCount} tokens`;
     }
 
     updatePrinterUI();
@@ -1800,8 +2111,8 @@ function renderModeInputs(mode) {
 
     container.innerHTML = `
       <div class="form-group">
-        <label>Select Block</label>
-        <div class="block-list">${listHtml}</div>
+        <label id="block-list-label">Select Block</label>
+        <div class="block-list" role="listbox" aria-labelledby="block-list-label">${listHtml}</div>
         <p class="hint" style="margin-top:6px">Each drafter receives 3 packs (one per set in block order).</p>
       </div>`;
 
@@ -1809,10 +2120,21 @@ function renderModeInputs(mode) {
     packsGroup.style.display = 'none';
 
     container.querySelectorAll('.block-item').forEach(el => {
-      el.addEventListener('click', () => {
-        container.querySelectorAll('.block-item').forEach(e => e.classList.remove('selected'));
+      el.setAttribute('role', 'option');
+      el.setAttribute('aria-selected', 'false');
+      el.setAttribute('tabindex', '0');
+      const selectBlock = () => {
+        container.querySelectorAll('.block-item').forEach(e => {
+          e.classList.remove('selected');
+          e.setAttribute('aria-selected', 'false');
+        });
         el.classList.add('selected');
+        el.setAttribute('aria-selected', 'true');
         state.selectedBlock = el.dataset.block;
+      };
+      el.addEventListener('click', selectBlock);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectBlock(); }
       });
     });
 
@@ -2103,6 +2425,8 @@ async function loadCardList() {
       const header = { title: 'Card List', setName: `${allFaces.length} card(s)`, type: 'List' };
       const packBlock = renderPackBlock(header, allFaces);
       packBlock.classList.add('expanded');
+      const ph = packBlock.querySelector('.pack-header');
+      if (ph) ph.setAttribute('aria-expanded', 'true');
       const chevron = packBlock.querySelector('.pack-chevron');
       if (chevron) chevron.textContent = '▼';
       packsContainer.appendChild(packBlock);
@@ -2145,7 +2469,9 @@ function loadSettings() {
     if (data.mode) {
       state.mode = data.mode;
       document.querySelectorAll('.mode-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.mode === data.mode);
+        const isActive = b.dataset.mode === data.mode;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-pressed', String(isActive));
       });
       renderModeInputs(data.mode);
     }
@@ -2214,8 +2540,12 @@ function init() {
   // Mode buttons
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
       state.mode = btn.dataset.mode;
       renderModeInputs(state.mode);
       saveSettings();
@@ -2228,10 +2558,28 @@ function init() {
     await generateDraft();
   });
 
+  // Expand / Collapse All
+  const expandAllBtn = document.getElementById('expand-all-btn');
+  expandAllBtn.addEventListener('click', () => {
+    const allBlocks = document.querySelectorAll('#packs-container .pack-block, #tokens-section.pack-block');
+    const allExpanded = Array.from(allBlocks).every(b => b.classList.contains('expanded'));
+    allBlocks.forEach(b => {
+      b.classList.toggle('expanded', !allExpanded);
+      const ph = b.querySelector('.pack-header');
+      if (ph) {
+        ph.setAttribute('aria-expanded', String(!allExpanded));
+        const chevron = ph.querySelector('.pack-chevron');
+        if (chevron) chevron.textContent = !allExpanded ? '▼' : '►';
+      }
+    });
+    expandAllBtn.textContent = allExpanded ? '▼ Expand All' : '► Collapse All';
+  });
+
   // New draft button
   document.getElementById('new-draft-btn').addEventListener('click', () => {
     showScreen('setup');
     document.getElementById('generate-btn').disabled = false;
+    expandAllBtn.textContent = '▼ Expand All';
   });
 
   // Printer connect/disconnect toggle
@@ -2276,19 +2624,57 @@ function init() {
   // Print List (setup screen) — loads into results view
   document.getElementById('print-list-btn').addEventListener('click', () => loadCardList());
 
+  // Tokens section collapse/expand
+  const tokensHeader = document.getElementById('tokens-header');
+  const tokensSection = document.getElementById('tokens-section');
+  const toggleTokens = () => {
+    tokensSection.classList.toggle('expanded');
+    const isExpanded = tokensSection.classList.contains('expanded');
+    tokensHeader.setAttribute('aria-expanded', String(isExpanded));
+    const chevron = tokensHeader.querySelector('.pack-chevron');
+    if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
+  };
+  tokensHeader.addEventListener('click', toggleTokens);
+  tokensHeader.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTokens(); }
+  });
+
   // Persist settings on form changes
   document.getElementById('num-packs').addEventListener('change', () => saveSettings());
   document.getElementById('num-drafters').addEventListener('change', () => saveSettings());
   document.getElementById('include-tokens').addEventListener('change', () => saveSettings());
 
-  // Help modal
+  // Help modal with focus trap (WCAG 2.4.7, 1.3.2)
   const helpBtn = document.getElementById('help-btn');
   const helpOverlay = document.getElementById('help-overlay');
   const helpClose = document.getElementById('help-modal-close');
-  helpBtn.addEventListener('click', () => helpOverlay.classList.add('visible'));
-  helpClose.addEventListener('click', () => helpOverlay.classList.remove('visible'));
+
+  function openHelpModal() {
+    helpOverlay.classList.add('visible');
+    helpOverlay.setAttribute('aria-hidden', 'false');
+    helpBtn.setAttribute('aria-expanded', 'true');
+    helpClose.focus();
+  }
+  function closeHelpModal() {
+    helpOverlay.classList.remove('visible');
+    helpOverlay.setAttribute('aria-hidden', 'true');
+    helpBtn.setAttribute('aria-expanded', 'false');
+    helpBtn.focus();
+  }
+  helpBtn.addEventListener('click', openHelpModal);
+  helpClose.addEventListener('click', closeHelpModal);
   helpOverlay.addEventListener('click', (e) => {
-    if (e.target === helpOverlay) helpOverlay.classList.remove('visible');
+    if (e.target === helpOverlay) closeHelpModal();
+  });
+  helpOverlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      const focusable = helpOverlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   });
 
   // Konami Code easter egg
@@ -3021,9 +3407,14 @@ function openLightbox(packIdx, cardIdxInPack) {
   }
 
   if (!lightbox.el) createLightboxDOM();
+  lightbox._previousFocus = document.activeElement;
   document.body.appendChild(lightbox.el);
   showLightboxCard(globalIdx);
-  requestAnimationFrame(() => lightbox.el.classList.add('visible'));
+  requestAnimationFrame(() => {
+    lightbox.el.classList.add('visible');
+    const closeBtn = lightbox.el.querySelector('.card-lightbox-close');
+    if (closeBtn) closeBtn.focus();
+  });
 }
 
 function closeLightbox() {
@@ -3031,6 +3422,10 @@ function closeLightbox() {
   lightbox.el.classList.remove('visible');
   setTimeout(() => { if (lightbox.el?.parentNode) lightbox.el.parentNode.removeChild(lightbox.el); }, 200);
   lightbox.current = -1;
+  if (lightbox._previousFocus) {
+    lightbox._previousFocus.focus();
+    lightbox._previousFocus = null;
+  }
 }
 
 async function showLightboxCard(idx) {
@@ -3061,6 +3456,7 @@ async function showLightboxCard(idx) {
     flipBtn.className = 'card-lightbox-flip';
     flipBtn.textContent = '↔';
     flipBtn.title = 'Flip card';
+    flipBtn.setAttribute('aria-label', 'Flip card');
     flipBtn.addEventListener('click', (e) => { e.stopPropagation(); lightbox.inner.classList.toggle('flipped'); });
     lightbox.inner.appendChild(flipBtn);
   }
@@ -3097,6 +3493,9 @@ function lightboxNav(delta) {
 function createLightboxDOM() {
   const overlay = document.createElement('div');
   overlay.className = 'card-lightbox';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Card viewer');
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay || e.target === wrap) closeLightbox();
   });
@@ -3108,6 +3507,7 @@ function createLightboxDOM() {
   const prevBtn = document.createElement('button');
   prevBtn.className = 'card-lightbox-nav prev';
   prevBtn.textContent = '‹';
+  prevBtn.setAttribute('aria-label', 'Previous card');
   prevBtn.addEventListener('click', (e) => { e.stopPropagation(); lightboxNav(-1); });
   wrap.appendChild(prevBtn);
 
@@ -3119,12 +3519,14 @@ function createLightboxDOM() {
   const nextBtn = document.createElement('button');
   nextBtn.className = 'card-lightbox-nav next';
   nextBtn.textContent = '›';
+  nextBtn.setAttribute('aria-label', 'Next card');
   nextBtn.addEventListener('click', (e) => { e.stopPropagation(); lightboxNav(1); });
   wrap.appendChild(nextBtn);
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'card-lightbox-close';
   closeBtn.textContent = '✕';
+  closeBtn.setAttribute('aria-label', 'Close card viewer');
   closeBtn.addEventListener('click', closeLightbox);
   overlay.appendChild(closeBtn);
 
@@ -3155,7 +3557,7 @@ function setupLightboxKeys() {
     if (e.key === 'Escape') {
       const helpOverlay = document.getElementById('help-overlay');
       if (helpOverlay?.classList.contains('visible')) {
-        helpOverlay.classList.remove('visible');
+        closeHelpModal();
         e.preventDefault();
         return;
       }
