@@ -1500,7 +1500,7 @@ let FLAVOR_TEXTS = [
 
 async function loadFlavorTexts() {
   try {
-    const resp = await fetch('https://api.scryfall.com/cards/search?q=has%3Aflavortext+is%3Afirstprint+-is%3Areprint&order=random&page=1');
+    const resp = await fetch('https://api.scryfall.com/cards/search?q=has%3Aflavortext+is%3Afirstprint+-is%3Areprint+-s%3Aanb+-s%3Aana+-s%3Aoana&order=random&page=1');
     if (!resp.ok) return;
     const data = await resp.json();
     const fetched = data.data
