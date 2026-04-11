@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MTG Instant Draft Machine</title>
+  <title>Instant Draft Machine</title>
   <!-- terminal-style monospace only -->
   <style>
     :root {
@@ -66,6 +66,109 @@
       font-size: 0.95rem;
       font-weight: 400;
     }
+
+    /* ── HELP BUTTON ── */
+    .help-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      z-index: 10;
+    }
+    .help-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    /* ── HELP MODAL ── */
+    .help-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    .help-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .help-modal {
+      max-width: 540px;
+      width: calc(100% - 40px);
+      max-height: 80vh;
+      overflow-y: auto;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      position: relative;
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+    .help-modal-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text3);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .help-modal-close:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .help-modal h2 {
+      font-family: inherit;
+      font-size: 1.15rem;
+      color: var(--accent);
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+    .help-modal p {
+      color: var(--text2);
+      font-size: 0.88rem;
+      line-height: 1.65;
+      margin-bottom: 14px;
+    }
+    .help-modal p:last-child { margin-bottom: 0; }
+    .help-modal code {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: var(--radius);
+      font-size: 0.84rem;
+      color: var(--accent);
+    }
+    .help-modal strong { color: var(--text); font-weight: 600; }
 
     /* ── LAYOUT ── */
     #main-content { max-width: 1300px; margin: 0 auto; padding: 32px 20px 64px; }
@@ -643,9 +746,24 @@
 
 <div id="app">
   <header class="app-header">
-    <h1 class="app-title">MTG Instant Draft Machine</h1>
-    <p class="app-subtitle">Generate authentic booster packs from any Magic: The Gathering set</p>
+    <h1 class="app-title">Instant Draft Machine</h1>
+    <p class="app-subtitle">Generate authentic booster packs from any set</p>
+    <button class="help-btn" id="help-btn" title="How to use this site">?</button>
   </header>
+
+  <div class="help-overlay" id="help-overlay">
+    <div class="help-modal">
+      <button class="help-modal-close" id="help-modal-close">✕</button>
+      <h2>How to Use</h2>
+      <p><strong>Set Draft</strong> — Enter a set code (e.g. <code>dsk</code>, <code>lci</code>, <code>mh3</code>) and the number of packs to open. The machine builds a full card pool from Scryfall and rolls authentic boosters with correct rarity distributions, bonus sheets, and special slots.</p>
+      <p><strong>Chaos Draft</strong> — Each pack comes from a different random draftable set. Great for wild, unpredictable games.</p>
+      <p><strong>Block Draft</strong> — Pick a historical block and a number of drafters. Each drafter gets 3 packs, one from each set in block order, just like the old days.</p>
+      <p><strong>Cube Draft</strong> — Paste a CubeCobra cube ID or URL, or paste a card list directly. Packs are drawn randomly from the list.</p>
+      <p><strong>Quick Print</strong> — Connect a thermal receipt printer via WebUSB and print any card by name. Works with most ESC/POS printers (Chrome or Edge required).</p>
+      <p><strong>Print a List</strong> — Paste a list of cards in the format <code>[qty] [name] ([set]) [collector#]</code> to batch-print multiple cards at once.</p>
+      <p>Set codes can be found at <strong>scryfall.com/sets</strong>. Type <code>ascii [code]</code> in the set code field for retro mode. Try the Konami code for a surprise.</p>
+    </div>
+  </div>
 
   <main id="main-content">
     <!-- SETUP -->
@@ -699,6 +817,20 @@
           <div class="printer-dot" id="setup-printer-dot"></div>
           <span class="printer-label" id="setup-printer-label" style="font-size: 0.82rem;">No printer connected</span>
           <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;"></span>
+        </div>
+      </div>
+
+      <div class="setup-card" style="margin-top: 20px;">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Print a Card List</label>
+          <p class="hint" style="margin-top: 2px;">Paste a list to print. Format: <code>[qty] [card] [set] [collector num]</code></p>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <textarea id="print-list-input" placeholder="Paste your card list here..." style="min-height: 130px; font-size: 0.82rem;"></textarea>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button class="btn-secondary" id="print-list-btn" style="white-space: nowrap;">Print List</button>
+          <span class="printer-status-text" id="print-list-status" style="font-size: 0.78rem;"></span>
         </div>
       </div>
     </section>
@@ -1873,6 +2005,122 @@ async function quickPrintFrom(inputId) {
 async function quickPrint() { return quickPrintFrom('quick-print-input'); }
 
 // ═══════════════════════════════════════════════════════════════
+// LIST PRINT (Setup Screen)
+// ═══════════════════════════════════════════════════════════════
+
+function parseCardList(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const entries = [];
+  // Format: [qty] [card name] ([set]) [collector#]
+  const re = /^(\d+)\s+(.+?)\s+\(([^)]+)\)\s+(\S+)$/;
+  for (const line of lines) {
+    const m = line.match(re);
+    if (m) {
+      entries.push({
+        qty: parseInt(m[1], 10),
+        name: m[2].trim(),
+        set: m[3].trim().toLowerCase(),
+        collectorNumber: m[4].trim(),
+      });
+    }
+  }
+  return entries;
+}
+
+async function fetchCardBySetCollector(setCode, collectorNumber) {
+  const url = `https://api.scryfall.com/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`;
+  const res = await rateLimitedGet(url);
+  if (res && res.status === 200) return res.json();
+  return null;
+}
+
+async function printCardList() {
+  const textarea = document.getElementById('print-list-input');
+  const statusEl = document.getElementById('print-list-status');
+  const rawText = (textarea?.value || '').trim();
+  if (!rawText) return;
+
+  if (!printerState.connected) {
+    alert('Connect a printer first.');
+    return;
+  }
+
+  const entries = parseCardList(rawText);
+  if (!entries.length) {
+    if (statusEl) statusEl.textContent = 'No valid lines found. Format: [qty] [name] ([set]) [collector#]';
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 5000);
+    return;
+  }
+
+  const btn = document.getElementById('print-list-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Printing...'; }
+  state.isPrintingCanceled = false;
+
+  const setStatus = (msg) => {
+    if (statusEl) statusEl.textContent = msg;
+    setPrintingIndicator(msg);
+    const sStatus = document.getElementById('setup-printer-status');
+    if (sStatus) sStatus.textContent = msg;
+  };
+
+  let totalCards = entries.reduce((s, e) => s + e.qty, 0);
+  let printed = 0;
+
+  try {
+    for (const entry of entries) {
+      if (state.isPrintingCanceled) break;
+
+      setStatus(`Fetching ${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}...`);
+      const card = await fetchCardBySetCollector(entry.set, entry.collectorNumber);
+      if (!card) {
+        setStatus(`Not found: ${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber} -- skipping`);
+        await sleep(2000);
+        printed += entry.qty;
+        continue;
+      }
+
+      const faces = parseScryfallCard(card);
+      const groups = [];
+      let i = 0;
+      while (i < faces.length) {
+        const face = faces[i];
+        if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
+          groups.push([face, faces[i+1]]);
+          i += 2;
+        } else {
+          groups.push([face]);
+          i++;
+        }
+      }
+
+      for (let copy = 0; copy < entry.qty; copy++) {
+        if (state.isPrintingCanceled) break;
+        setStatus(`Printing ${entry.name} (${copy + 1}/${entry.qty}) — ${printed + 1}/${totalCards} total`);
+        for (const group of groups) {
+          for (let fi = 0; fi < group.length; fi++) {
+            if (state.isPrintingCanceled) break;
+            await printCardFace(group[fi], fi === group.length - 1, true);
+          }
+        }
+        printed++;
+      }
+    }
+
+    if (!state.isPrintingCanceled) {
+      setStatus(`List complete — ${printed} card(s) printed!`);
+      setTimeout(() => setStatus(''), 5000);
+    }
+  } catch (err) {
+    if (!state.isPrintingCanceled) {
+      setStatus(`Print error: ${err.message}`);
+      console.error(err);
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Print List'; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // LOCAL STORAGE PERSISTENCE
 // ═══════════════════════════════════════════════════════════════
 const LS_KEY = 'mtg_draft_settings';
@@ -2027,10 +2275,23 @@ function init() {
     else await connectPrinter();
   });
 
+  // Print List (setup screen)
+  document.getElementById('print-list-btn').addEventListener('click', () => printCardList());
+
   // Persist settings on form changes
   document.getElementById('num-packs').addEventListener('change', () => saveSettings());
   document.getElementById('num-drafters').addEventListener('change', () => saveSettings());
   document.getElementById('include-tokens').addEventListener('change', () => saveSettings());
+
+  // Help modal
+  const helpBtn = document.getElementById('help-btn');
+  const helpOverlay = document.getElementById('help-overlay');
+  const helpClose = document.getElementById('help-modal-close');
+  helpBtn.addEventListener('click', () => helpOverlay.classList.add('visible'));
+  helpClose.addEventListener('click', () => helpOverlay.classList.remove('visible'));
+  helpOverlay.addEventListener('click', (e) => {
+    if (e.target === helpOverlay) helpOverlay.classList.remove('visible');
+  });
 
   // Konami Code easter egg
   setupKonamiCode();
@@ -2893,9 +3154,18 @@ function createLightboxDOM() {
 
 function setupLightboxKeys() {
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const helpOverlay = document.getElementById('help-overlay');
+      if (helpOverlay?.classList.contains('visible')) {
+        helpOverlay.classList.remove('visible');
+        e.preventDefault();
+        return;
+      }
+      if (lightbox.current >= 0) { closeLightbox(); e.preventDefault(); }
+      return;
+    }
     if (lightbox.current < 0) return;
-    if (e.key === 'Escape') { closeLightbox(); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { lightboxNav(1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { lightboxNav(1); e.preventDefault(); }
     else if (e.key === 'ArrowLeft') { lightboxNav(-1); e.preventDefault(); }
   });
 }
