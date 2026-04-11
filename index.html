@@ -761,7 +761,7 @@
       <p><strong>Cube Draft</strong> — Paste a CubeCobra cube ID or URL, or paste a card list directly. Packs are drawn randomly from the list.</p>
       <p><strong>Quick Print</strong> — Connect a thermal receipt printer via WebUSB and print any card by name. Works with most ESC/POS printers (Chrome or Edge required).</p>
       <p><strong>Print a List</strong> — Paste a list of cards in the format <code>[qty] [name] ([set]) [collector#]</code> to batch-print multiple cards at once.</p>
-      <p>Set codes can be found at <strong>scryfall.com/sets</strong>. 
+      <p>Set codes can be found at <strong>scryfall.com/sets</strong>.</p>
     </div>
   </div>
 
@@ -1642,15 +1642,8 @@ async function generateDraft() {
 
     } else {
       // Standard set
-      let rawCode = document.getElementById('set-code-input')?.value.trim().toLowerCase() || '';
+      const rawCode = document.getElementById('set-code-input')?.value.trim().toLowerCase() || '';
       if (!rawCode) { showScreen('setup'); genBtn.disabled = false; return; }
-
-      // ASCII easter egg (only activate, never deactivate -- Konami code may have set it)
-      if (rawCode.startsWith('ascii')) {
-        state.retroMode = true;
-        document.body.classList.add('retro');
-        rawCode = rawCode.replace(/^ascii\s*/, '').trim();
-      }
 
       state.setCode = rawCode || 'dft';
       draftSequence = Array(state.numPacks).fill(state.setCode);
@@ -1782,7 +1775,7 @@ function renderModeInputs(mode) {
       <div class="form-group">
         <label for="set-code-input">Set Code</label>
         <input type="text" id="set-code-input" placeholder="e.g. dsk, lci, ktk, mh3" maxlength="8" spellcheck="false" autocomplete="off">
-        <p class="hint">Find set codes on <a href="https://scryfall.com/sets" target="_blank">Scryfall Sets</a>. Type <code>ascii {code}</code> for retro mode.</p>
+        <p class="hint">Find set codes on <a href="https://scryfall.com/sets" target="_blank">Scryfall Sets</a>.</p>
       </div>`;
     document.getElementById('packs-group').querySelector('label').textContent = 'Number of Packs';
 
