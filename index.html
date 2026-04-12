@@ -870,7 +870,7 @@
       <p><strong>Chaos Draft</strong> — Each pack comes from a different random draftable set. Great for wild, unpredictable games.</p>
       <p><strong>Block Draft</strong> — Pick a historical block and a number of drafters. Each drafter gets 3 packs, one from each set in block order, just like the old days.</p>
       <p><strong>Cube Draft</strong> — Paste a CubeCobra cube ID or URL, or paste a card list directly. Packs are drawn randomly from the list.</p>
-      <p><strong>Quick Print</strong> — Connect a thermal receipt printer via WebUSB and print any card by name. Works with most ESC/POS printers (Chrome or Edge required).</p>
+      <p><strong>Quick Print</strong> — Connect a thermal receipt printer via WebUSB and print any card. Enter a card name (e.g. <code>Lightning Bolt</code>), a set+collector number (e.g. <code>stx102</code>), or prefix with a number for multiple copies (e.g. <code>4 Lightning Bolt</code>, <code>4 stx102</code>). Works with most ESC/POS printers (Chrome or Edge required).</p>
       <p><strong>Print a List</strong> — Paste a list of cards in the format <code>[qty] [name] ([set]) [collector#]</code> to batch-print multiple cards at once.</p>
       <p>Set codes can be found at <strong>scryfall.com/sets</strong>.</p>
     </div>
@@ -917,10 +917,10 @@
       <div class="setup-card" style="margin-top: 20px;">
         <div class="form-group" style="margin-bottom: 12px;">
           <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Quick Print a Single Card</label>
-          <p class="hint" style="margin-top: 2px;">Type any card name to fetch and print it instantly.</p>
+          <p class="hint" style="margin-top: 2px;">Card name, set+collector (e.g. <code>stx102</code>), or prefix with a number for copies (e.g. <code>4 Lightning Bolt</code>).</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
+          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt, 4 stx102" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
           <button class="btn-secondary" id="setup-quick-print-btn" style="white-space: nowrap;">Print Card</button>
           <button class="btn-secondary" id="setup-printer-connect-btn">Connect Printer</button>
         </div>
@@ -981,7 +981,7 @@
           <label for="gang-print-toggle">Gang Print (no cuts)</label>
         </div>
         <div class="quick-print-row">
-          <input type="text" id="quick-print-input" placeholder="Quick print card..." spellcheck="false" aria-label="Card name to quick print">
+          <input type="text" id="quick-print-input" placeholder="Card name, stx102, or 4 Lightning Bolt" spellcheck="false" aria-label="Card name to quick print">
           <button class="btn-printer-connect" id="quick-print-btn" title="Fetch and print single card">Print</button>
         </div>
         <button class="btn-printer-connect" id="connect-printer-btn">Connect Printer</button>
@@ -2263,14 +2263,33 @@ async function toggleThermalPreview(enabled) {
 // ═══════════════════════════════════════════════════════════════
 // QUICK PRINT (Single Card)
 // ═══════════════════════════════════════════════════════════════
+
+let _quickPrintBusy = false;
+
+function parseSetCollector(input) {
+  if (/\s/.test(input) || input.length < 4) return null;
+  for (const len of [3, 4, 5, 2]) {
+    if (len >= input.length) continue;
+    const set = input.slice(0, len);
+    const num = input.slice(len);
+    if (/^[a-z0-9]+$/i.test(set) && /^\d+[a-z]?$/i.test(num)) {
+      return { set: set.toLowerCase(), collectorNumber: num };
+    }
+  }
+  return null;
+}
+
 async function quickPrintFrom(inputId) {
+  if (_quickPrintBusy) return;
   const input = document.getElementById(inputId);
-  const name = (input?.value || '').trim();
-  if (!name) return;
+  const raw = (input?.value || '').trim();
+  if (!raw) return;
   if (!printerState.connected) {
     alert('Connect a printer first.');
     return;
   }
+
+  _quickPrintBusy = true;
 
   const statusMsg = (msg) => {
     setPrintingIndicator(msg);
@@ -2278,39 +2297,76 @@ async function quickPrintFrom(inputId) {
     if (sStatus) sStatus.textContent = msg;
   };
 
-  statusMsg(`Fetching "${name}" from Scryfall...`);
-  const card = await fetchCardByName(name);
-  if (!card) {
-    statusMsg(`Card not found: "${name}"`);
-    setTimeout(() => statusMsg(''), 3000);
-    return;
-  }
+  try {
+    let qty = 1;
+    let rest = raw;
+    const qtyMatch = raw.match(/^(\d+)\s+(.+)$/);
+    if (qtyMatch) {
+      qty = Math.max(1, parseInt(qtyMatch[1], 10));
+      rest = qtyMatch[2].trim();
+    }
 
-  const faces = parseScryfallCard(card);
-  state.isPrintingCanceled = false;
-
-  const groups = [];
-  let i = 0;
-  while (i < faces.length) {
-    const face = faces[i];
-    if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
-      groups.push([face, faces[i+1]]);
-      i += 2;
+    let card = null;
+    const sc = parseSetCollector(rest);
+    if (sc) {
+      statusMsg(`Fetching ${sc.set.toUpperCase()} #${sc.collectorNumber} from Scryfall...`);
+      card = await fetchCardBySetCollector(sc.set, sc.collectorNumber);
+      if (!card) {
+        statusMsg(`Set/collector not found, trying as card name...`);
+        card = await fetchCardByName(rest);
+      }
     } else {
-      groups.push([face]);
-      i++;
+      statusMsg(`Fetching "${rest}" from Scryfall...`);
+      card = await fetchCardByName(rest);
     }
-  }
 
-  for (const group of groups) {
-    for (let fi = 0; fi < group.length; fi++) {
-      await printCardFace(group[fi], fi === group.length - 1, true);
+    if (!card) {
+      statusMsg(`Card not found: "${rest}"`);
+      setTimeout(() => statusMsg(''), 4000);
+      return;
     }
-  }
 
-  statusMsg(`Printed: ${card.name}`);
-  setTimeout(() => statusMsg(''), 3000);
-  input.value = '';
+    const faces = parseScryfallCard(card);
+    state.isPrintingCanceled = false;
+
+    const groups = [];
+    let i = 0;
+    while (i < faces.length) {
+      const face = faces[i];
+      if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
+        groups.push([face, faces[i+1]]);
+        i += 2;
+      } else {
+        groups.push([face]);
+        i++;
+      }
+    }
+
+    await printerSend(new Uint8Array([0x1B, 0x40]));
+
+    for (let copy = 0; copy < qty; copy++) {
+      if (state.isPrintingCanceled) break;
+      for (const group of groups) {
+        if (state.isPrintingCanceled) break;
+        for (let fi = 0; fi < group.length; fi++) {
+          if (state.isPrintingCanceled) break;
+          await printCardFace(group[fi], fi === group.length - 1, true);
+        }
+      }
+    }
+
+    if (!state.isPrintingCanceled) {
+      statusMsg(`Printed${qty > 1 ? ` ${qty}x` : ''}: ${card.name}`);
+      setTimeout(() => statusMsg(''), 3000);
+    }
+    input.value = '';
+  } catch (err) {
+    statusMsg(`Print error: ${err.message}`);
+    console.error('Quick print error:', err);
+    setTimeout(() => statusMsg(''), 5000);
+  } finally {
+    _quickPrintBusy = false;
+  }
 }
 
 async function quickPrint() { return quickPrintFrom('quick-print-input'); }
@@ -2597,13 +2653,13 @@ function init() {
   // Quick Print (results screen)
   document.getElementById('quick-print-btn').addEventListener('click', () => quickPrintFrom('quick-print-input'));
   document.getElementById('quick-print-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') quickPrintFrom('quick-print-input');
+    if (e.key === 'Enter') { e.preventDefault(); quickPrintFrom('quick-print-input'); }
   });
 
   // Quick Print (setup screen)
   document.getElementById('setup-quick-print-btn').addEventListener('click', () => quickPrintFrom('setup-quick-print-input'));
   document.getElementById('setup-quick-print-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') quickPrintFrom('setup-quick-print-input');
+    if (e.key === 'Enter') { e.preventDefault(); quickPrintFrom('setup-quick-print-input'); }
   });
   document.getElementById('setup-printer-connect-btn').addEventListener('click', async () => {
     if (printerState.connected) await disconnectPrinter();
