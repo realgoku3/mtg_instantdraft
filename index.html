@@ -11,13 +11,8 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<a href="#main-content" class="skip-link">Skip to main content</a>
-
 <div id="app">
   <header class="app-header">
-    <h1 class="app-title">Instant Draft Machine</h1>
-    <p class="app-subtitle">Generate authentic booster packs from any set</p>
-    <button class="help-btn" id="help-btn" aria-label="Help — how to use this site" aria-expanded="false" aria-controls="help-overlay">?</button>
     <h1 class="app-title">Instant Draft Machine</h1>
     <p class="app-subtitle">Generate authentic booster packs from any set</p>
     <button class="help-btn" id="help-btn" aria-label="Help — how to use this site" aria-expanded="false" aria-controls="help-overlay">?</button>
@@ -37,28 +32,9 @@
     </div>
   </div>
 
-  <div class="help-overlay" id="help-overlay" role="dialog" aria-modal="true" aria-label="How to use this site" aria-hidden="true">
-    <div class="help-modal">
-      <button class="help-modal-close" id="help-modal-close" aria-label="Close help dialog">✕</button>
-      <h2>How to Use</h2>
-      <p><strong>Set Draft</strong> — Enter a set code (e.g. <code>dsk</code>, <code>lci</code>, <code>mh3</code>) and the number of packs to open. The machine builds a full card pool from Scryfall and rolls authentic boosters with correct rarity distributions, bonus sheets, and special slots.</p>
-      <p><strong>Chaos Draft</strong> — Each pack comes from a different random draftable set. Great for wild, unpredictable games.</p>
-      <p><strong>Block Draft</strong> — Pick a historical block and a number of drafters. Each drafter gets 3 packs, one from each set in block order, just like the old days.</p>
-      <p><strong>Cube Draft</strong> — Paste a CubeCobra cube ID or URL, or paste a card list directly. Packs are drawn randomly from the list.</p>
-      <p><strong>Quick Print</strong> — Connect a thermal receipt printer via WebUSB and print any card. Enter a card name (e.g. <code>Lightning Bolt</code>), a set+collector number (e.g. <code>stx102</code>), or prefix with a number for multiple copies (e.g. <code>4 Lightning Bolt</code>, <code>4 stx102</code>). Works with most ESC/POS printers (Chrome or Edge required).</p>
-      <p><strong>Print a List</strong> — Paste a list of cards in the format <code>[qty] [name] ([set]) [collector#]</code> to batch-print multiple cards at once.</p>
-      <p>Set codes can be found at <strong>scryfall.com/sets</strong>.</p>
-    </div>
-  </div>
-
   <main id="main-content">
     <!-- SETUP -->
     <section id="setup-screen">
-      <div class="mode-selector" id="mode-selector" role="group" aria-label="Draft mode">
-        <button class="mode-btn active" data-mode="set" aria-pressed="true">Set Draft</button>
-        <button class="mode-btn" data-mode="chaos" aria-pressed="false">Chaos</button>
-        <button class="mode-btn" data-mode="block" aria-pressed="false">Block</button>
-        <button class="mode-btn" data-mode="cube" aria-pressed="false">Cube</button>
       <div class="mode-selector" id="mode-selector" role="group" aria-label="Draft mode">
         <button class="mode-btn active" data-mode="set" aria-pressed="true">Set Draft</button>
         <button class="mode-btn" data-mode="chaos" aria-pressed="false">Chaos</button>
@@ -98,10 +74,8 @@
         <div class="form-group" style="margin-bottom: 12px;">
           <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Quick Print a Single Card</label>
           <p class="hint" style="margin-top: 2px;">Card name, set+collector (e.g. <code>stx102</code>), or prefix with a number for copies (e.g. <code>4 Lightning Bolt</code>).</p>
-          <p class="hint" style="margin-top: 2px;">Card name, set+collector (e.g. <code>stx102</code>), or prefix with a number for copies (e.g. <code>4 Lightning Bolt</code>).</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt, 4 stx102" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
           <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt, 4 stx102" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
           <button class="btn-secondary" id="setup-quick-print-btn" style="white-space: nowrap;">Print Card</button>
           <button class="btn-secondary" id="setup-printer-connect-btn">Connect Printer</button>
@@ -109,21 +83,6 @@
         <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
           <div class="printer-dot" id="setup-printer-dot"></div>
           <span class="printer-label" id="setup-printer-label" style="font-size: 0.82rem;">No printer connected</span>
-          <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;" aria-live="polite"></span>
-        </div>
-      </div>
-
-      <div class="setup-card" style="margin-top: 20px;">
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Print a Card List</label>
-          <p class="hint" style="margin-top: 2px;">Paste a list to print. Format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
-        </div>
-        <div class="form-group" style="margin-bottom: 12px;">
-          <textarea id="print-list-input" placeholder="Paste your card list here..." style="min-height: 130px; font-size: 0.82rem;" aria-label="Card list to print"></textarea>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn-secondary" id="print-list-btn" style="white-space: nowrap;">Load List</button>
-          <span class="printer-status-text" id="print-list-status" style="font-size: 0.78rem;" aria-live="polite"></span>
           <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;" aria-live="polite"></span>
         </div>
       </div>
@@ -147,13 +106,7 @@
     <div id="progress-section" style="display:none" aria-live="polite">
       <div class="progress-spinner" role="img" aria-label="Loading"></div>
       <div class="progress-track" role="progressbar" id="progress-track" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Draft generation progress"><div class="progress-fill" id="progress-fill"></div></div>
-    <div id="progress-section" style="display:none" aria-live="polite">
-      <div class="progress-spinner" role="img" aria-label="Loading"></div>
-      <div class="progress-track" role="progressbar" id="progress-track" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Draft generation progress"><div class="progress-fill" id="progress-fill"></div></div>
       <p id="progress-text">Preparing...</p>
-      <div class="flavor-container">
-        <div class="flavor-text" id="flavor-text"></div>
-      </div>
       <div class="flavor-container">
         <div class="flavor-text" id="flavor-text"></div>
       </div>
@@ -166,16 +119,8 @@
         <div class="results-actions">
           <button class="btn-secondary" id="copy-pool-btn" title="Copy all cards as a text list to clipboard">📋 Copy Pool as Text</button>
           <button class="btn-secondary" id="expand-all-btn">▼ Expand All</button>
-          <button class="btn-secondary" id="copy-pool-btn" title="Copy all cards as a text list to clipboard">📋 Copy Pool as Text</button>
-          <button class="btn-secondary" id="expand-all-btn">▼ Expand All</button>
           <button class="btn-secondary" id="print-all-btn" style="display:none">Print All Packs</button>
           <button class="btn-cancel-print" id="cancel-print-btn" style="display:none">Cancel Print</button>
-          <label class="thermal-toggle-wrap toggle-row" title="Print ( ) card lines on each pack slip before the proxy images (not shown in the browser)">
-            <input type="checkbox" id="include-checklist-headers-toggle">
-            <span class="toggle-track"></span>
-            <span class="toggle-label">Print checklists</span>
-          </label>
-          <label class="thermal-toggle-wrap toggle-row" title="Preview cards as on the thermal printer. Renders only for expanded packs (expand or Print Pack) so large drafts stay light.">
           <label class="thermal-toggle-wrap toggle-row" title="Print ( ) card lines on each pack slip before the proxy images (not shown in the browser)">
             <input type="checkbox" id="include-checklist-headers-toggle">
             <span class="toggle-track"></span>
@@ -193,13 +138,11 @@
         <div class="printer-dot" id="printer-dot"></div>
         <span class="printer-label" id="printer-label">No printer connected</span>
         <span class="printer-status-text" id="printer-status-text" aria-live="polite"></span>
-        <span class="printer-status-text" id="printer-status-text" aria-live="polite"></span>
         <div class="gang-print-row">
           <input type="checkbox" id="gang-print-toggle">
           <label for="gang-print-toggle">Gang Print (no cuts)</label>
         </div>
         <div class="quick-print-row">
-          <input type="text" id="quick-print-input" placeholder="Card name, stx102, or 4 Lightning Bolt" spellcheck="false" aria-label="Card name to quick print">
           <input type="text" id="quick-print-input" placeholder="Card name, stx102, or 4 Lightning Bolt" spellcheck="false" aria-label="Card name to quick print">
           <button class="btn-printer-connect" id="quick-print-btn" title="Fetch and print single card">Print</button>
         </div>
@@ -219,27 +162,7 @@
           <span class="printer-status-text" id="add-cards-status" style="font-size: 0.78rem;" aria-live="polite"></span>
         </div>
       </div>
-      <div id="error-banner" role="alert" aria-live="assertive"></div>
-      <div id="add-cards-bar" class="setup-card" style="display:none; margin-bottom: 20px;">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label style="font-size: 0.88rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Add More Cards</label>
-          <p class="hint" style="margin-top: 2px;">Same format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
-        </div>
-        <div class="form-group" style="margin-bottom: 10px;">
-          <textarea id="add-cards-input" placeholder="Paste additional cards here..." style="min-height: 80px; font-size: 0.82rem;" aria-label="Additional cards to add"></textarea>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn-secondary" id="add-cards-btn" style="white-space: nowrap;">Add to List</button>
-          <span class="printer-status-text" id="add-cards-status" style="font-size: 0.78rem;" aria-live="polite"></span>
-        </div>
-      </div>
       <div id="packs-container"></div>
-      <div id="tokens-section" class="pack-block" style="display:none">
-        <div class="pack-header" id="tokens-header" tabindex="0" role="button" aria-expanded="false">
-          <span class="pack-chevron">►</span>
-          <span class="pack-title">Tokens</span>
-          <span class="pack-badge" id="tokens-count"></span>
-        </div>
       <div id="tokens-section" class="pack-block" style="display:none">
         <div class="pack-header" id="tokens-header" tabindex="0" role="button" aria-expanded="false">
           <span class="pack-chevron">►</span>
