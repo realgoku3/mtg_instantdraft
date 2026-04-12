@@ -1915,35 +1915,48 @@ async function generateDraft() {
         return;
       }
 
+      // Expand entries into individual slots preserving identity (set/collector when specified)
+      const cubeSlots = [];
+      for (const entry of cubeEntries) {
+        for (let c = 0; c < entry.qty; c++) {
+          cubeSlots.push({ name: entry.name, set: entry.set, collectorNumber: entry.collectorNumber });
+        }
+      }
+
+      shuffleArray(cubeSlots);
+
+      // Only keep the cards we actually need for the requested packs
+      const cardsNeeded = state.numPacks * 15;
+      const slotsToFetch = cubeSlots.slice(0, cardsNeeded);
+
+      // Fetch only the cards that will appear in packs (cache deduplicates)
       setStatus('Fetching cube card data...');
       const cubeFetchCache = {};
       const cubePool = [];
       let cubeFetched = 0;
-      const cubeTotal = cubeEntries.length;
+      const fetchTotal = slotsToFetch.length;
 
-      for (const entry of cubeEntries) {
+      for (const slot of slotsToFetch) {
         let card = null;
-        if (entry.set && entry.collectorNumber) {
-          const key = `${entry.set}/${entry.collectorNumber}`;
+        if (slot.set && slot.collectorNumber) {
+          const key = `${slot.set}/${slot.collectorNumber}`;
           if (!cubeFetchCache[key]) {
-            setStatus(`Fetching ${entry.name} (${entry.set.toUpperCase()}) #${entry.collectorNumber}...`);
-            cubeFetchCache[key] = await fetchCardBySetCollector(entry.set, entry.collectorNumber);
+            setStatus(`Fetching ${slot.name} (${slot.set.toUpperCase()}) #${slot.collectorNumber}...`);
+            cubeFetchCache[key] = await fetchCardBySetCollector(slot.set, slot.collectorNumber);
           }
           card = cubeFetchCache[key];
         } else {
-          const key = entry.name.toLowerCase();
+          const key = slot.name.toLowerCase();
           if (!cubeFetchCache[key]) {
-            setStatus(`Fetching ${entry.name}...`);
-            cubeFetchCache[key] = await fetchCardByName(entry.name);
+            setStatus(`Fetching ${slot.name}...`);
+            cubeFetchCache[key] = await fetchCardByName(slot.name);
           }
           card = cubeFetchCache[key];
         }
 
-        if (card) {
-          for (let c = 0; c < entry.qty; c++) cubePool.push(card);
-        }
+        if (card) cubePool.push(card);
         cubeFetched++;
-        setProgress(Math.round((cubeFetched / cubeTotal) * 30));
+        setProgress(Math.round((cubeFetched / fetchTotal) * 30));
       }
 
       if (!cubePool.length) {
@@ -1953,7 +1966,6 @@ async function generateDraft() {
         return;
       }
 
-      shuffleArray(cubePool);
       cubeList = cubePool;
       cubeIndex = 0;
       draftSequence = Array(state.numPacks).fill('cube');
