@@ -1133,6 +1133,41 @@ async function fetchCardByName(name) {
   return null;
 }
 
+/**
+ * Batch-fetch cards via POST /cards/collection (up to 75 per request).
+ * Each identifier is either {name} or {set, collector_number}.
+ * Returns {found: [card,...], notFound: [identifier,...]}.
+ */
+async function fetchCardsCollection(identifiers) {
+  const found = [];
+  const notFound = [];
+  const BATCH = 75;
+
+  for (let i = 0; i < identifiers.length; i += BATCH) {
+    const batch = identifiers.slice(i, i + BATCH);
+    const mySlot = _nextCallTime;
+    _nextCallTime = Math.max(_nextCallTime + RATE_LIMIT_DELAY, Date.now() + RATE_LIMIT_DELAY);
+    const wait = mySlot - Date.now();
+    if (wait > 0) await sleep(wait);
+
+    const res = await fetch('https://api.scryfall.com/cards/collection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ identifiers: batch }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      found.push(...(data.data || []));
+      notFound.push(...(data.not_found || []));
+    } else if (res.status === 429) {
+      await sleep(2000);
+      i -= BATCH;
+    }
+  }
+  return { found, notFound };
+}
+
 async function getCubeList(cubeId) {
   setStatus(`Fetching cube list from CubeCobra (${cubeId})...`);
   const res = await rateLimitedGet(`https://cubecobra.com/cube/api/cubelist/${cubeId}`);
@@ -1484,6 +1519,7 @@ const state = {
   gangPrinting: false,
   isPrintingCanceled: false,
   isPrinting: false,
+  cubePackSize: 15,
   allPackFaces: [],
   allPackHeaders: [],
 };
@@ -1845,6 +1881,7 @@ async function generateDraft() {
   state.numPacks = parseInt(document.getElementById('num-packs').value) || 1;
   state.numDrafters = parseInt(document.getElementById('num-drafters')?.value) || 8;
   state.includeTokens = document.getElementById('include-tokens').checked;
+  state.cubePackSize = parseInt(document.getElementById('cube-pack-size')?.value) || 15;
 
   const genBtn = document.getElementById('generate-btn');
   genBtn.disabled = true;
@@ -1915,7 +1952,7 @@ async function generateDraft() {
         return;
       }
 
-      // Expand entries into individual slots preserving identity (set/collector when specified)
+      // Expand entries into individual slots preserving identity
       const cubeSlots = [];
       for (const entry of cubeEntries) {
         for (let c = 0; c < entry.qty; c++) {
@@ -1926,37 +1963,46 @@ async function generateDraft() {
       shuffleArray(cubeSlots);
 
       // Only keep the cards we actually need for the requested packs
-      const cardsNeeded = state.numPacks * 15;
+      const cardsNeeded = state.numPacks * state.cubePackSize;
       const slotsToFetch = cubeSlots.slice(0, cardsNeeded);
 
-      // Fetch only the cards that will appear in packs (cache deduplicates)
-      setStatus('Fetching cube card data...');
-      const cubeFetchCache = {};
-      const cubePool = [];
-      let cubeFetched = 0;
-      const fetchTotal = slotsToFetch.length;
-
+      // Deduplicate into unique identifiers for batch fetch
+      const uniqueIds = new Map();
       for (const slot of slotsToFetch) {
-        let card = null;
-        if (slot.set && slot.collectorNumber) {
-          const key = `${slot.set}/${slot.collectorNumber}`;
-          if (!cubeFetchCache[key]) {
-            setStatus(`Fetching ${slot.name} (${slot.set.toUpperCase()}) #${slot.collectorNumber}...`);
-            cubeFetchCache[key] = await fetchCardBySetCollector(slot.set, slot.collectorNumber);
-          }
-          card = cubeFetchCache[key];
-        } else {
-          const key = slot.name.toLowerCase();
-          if (!cubeFetchCache[key]) {
-            setStatus(`Fetching ${slot.name}...`);
-            cubeFetchCache[key] = await fetchCardByName(slot.name);
-          }
-          card = cubeFetchCache[key];
+        const key = (slot.set && slot.collectorNumber)
+          ? `sc:${slot.set}/${slot.collectorNumber}`
+          : `n:${slot.name.toLowerCase()}`;
+        if (!uniqueIds.has(key)) {
+          uniqueIds.set(key, (slot.set && slot.collectorNumber)
+            ? { set: slot.set, collector_number: slot.collectorNumber }
+            : { name: slot.name });
         }
+      }
 
+      setStatus(`Fetching ${uniqueIds.size} unique card(s) for cube...`);
+      setProgress(5);
+
+      const { found: batchFound, notFound: batchNotFound } = await fetchCardsCollection([...uniqueIds.values()]);
+
+      // Build lookup from results
+      const cardLookup = {};
+      for (const card of batchFound) {
+        if (card.set && card.collector_number) {
+          cardLookup[`sc:${card.set}/${card.collector_number}`] = card;
+        }
+        cardLookup[`n:${(card.name || '').toLowerCase()}`] = card;
+      }
+
+      setProgress(25);
+
+      // Map slots back to fetched card objects
+      const cubePool = [];
+      for (const slot of slotsToFetch) {
+        const key = (slot.set && slot.collectorNumber)
+          ? `sc:${slot.set}/${slot.collectorNumber}`
+          : `n:${slot.name.toLowerCase()}`;
+        const card = cardLookup[key];
         if (card) cubePool.push(card);
-        cubeFetched++;
-        setProgress(Math.round((cubeFetched / fetchTotal) * 30));
       }
 
       if (!cubePool.length) {
@@ -1966,6 +2012,7 @@ async function generateDraft() {
         return;
       }
 
+      setProgress(30);
       cubeList = cubePool;
       cubeIndex = 0;
       draftSequence = Array(state.numPacks).fill('cube');
@@ -2013,7 +2060,7 @@ async function generateDraft() {
           break;
         }
 
-        while (packCards.length < 15 && cubeIndex < cubeList.length) {
+        while (packCards.length < state.cubePackSize && cubeIndex < cubeList.length) {
           packCards.push(cubeList[cubeIndex++]);
         }
 
@@ -2190,21 +2237,29 @@ function renderModeInputs(mode) {
       <div class="form-group">
         <label for="cube-id-input">CubeCobra Cube ID or URL</label>
         <input type="text" id="cube-id-input" placeholder="e.g.  vintage_cube  or full URL" spellcheck="false" autocomplete="off">
-        <p class="hint">Paste the cube ID or a CubeCobra URL. Each pack pulls 15 random cards.</p>
+        <p class="hint">Paste the cube ID or a CubeCobra URL.</p>
       </div>
       <div class="form-group">
         <label>-- or paste card list directly --</label>
         <textarea id="cube-paste" placeholder="One card name per line (optional -- overrides Cube ID)"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="cube-pack-size">Cards per Pack</label>
+        <input type="number" id="cube-pack-size" min="1" max="50" value="${state.cubePackSize}">
       </div>`;
 
     const cubeInput = document.getElementById('cube-id-input');
     cubeInput.addEventListener('input', () => { state.cubeId = cubeInput.value.trim(); });
     cubeInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('num-packs').focus(); }
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('cube-pack-size').focus(); }
     });
     document.getElementById('cube-paste').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('cube-pack-size').focus(); }
+    });
+    document.getElementById('cube-pack-size').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); document.getElementById('num-packs').focus(); }
     });
+    document.getElementById('cube-pack-size').addEventListener('change', () => saveSettings());
   }
 }
 
@@ -2513,36 +2568,58 @@ async function loadCardList() {
   document.getElementById('cancel-print-btn').style.display = 'none';
   document.getElementById('print-all-btn').style.display = 'none';
 
-  const totalCards = entries.reduce((s, e) => s + e.qty, 0);
-  let fetched = 0;
   const allFaces = [];
   const skipped = [];
 
   try {
+    // Build unique identifiers for batch fetch
+    const seenKeys = new Set();
+    const idList = [];
     for (const entry of entries) {
-      let card = null;
-      if (entry.set && entry.collectorNumber) {
-        setStatus(`Fetching ${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}...`);
-        card = await fetchCardBySetCollector(entry.set, entry.collectorNumber);
-      } else {
-        setStatus(`Fetching ${entry.name} (random edition)...`);
-        card = await fetchCardByName(entry.name);
+      const key = (entry.set && entry.collectorNumber)
+        ? `sc:${entry.set}/${entry.collectorNumber}`
+        : `n:${entry.name.toLowerCase()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        idList.push((entry.set && entry.collectorNumber)
+          ? { set: entry.set, collector_number: entry.collectorNumber }
+          : { name: entry.name });
       }
+    }
+
+    setStatus(`Fetching ${idList.length} unique card(s)...`);
+    setProgress(10);
+    const { found: batchFound, notFound: batchNotFound } = await fetchCardsCollection(idList);
+
+    const cardLookup = {};
+    for (const card of batchFound) {
+      if (card.set && card.collector_number) {
+        cardLookup[`sc:${card.set}/${card.collector_number}`] = card;
+      }
+      cardLookup[`n:${(card.name || '').toLowerCase()}`] = card;
+    }
+    setProgress(50);
+
+    // Map entries back to fetched cards, expanding qty
+    let processed = 0;
+    const totalCards = entries.length;
+    for (const entry of entries) {
+      const key = (entry.set && entry.collectorNumber)
+        ? `sc:${entry.set}/${entry.collectorNumber}`
+        : `n:${entry.name.toLowerCase()}`;
+      const card = cardLookup[key];
 
       if (!card) {
         const label = entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name;
         skipped.push(label);
-        fetched += entry.qty;
-        setProgress(Math.round((fetched / totalCards) * 100));
-        continue;
+      } else {
+        const faces = parseScryfallCard(card);
+        for (let copy = 0; copy < entry.qty; copy++) {
+          allFaces.push(...faces);
+        }
       }
-
-      const faces = parseScryfallCard(card);
-      for (let copy = 0; copy < entry.qty; copy++) {
-        allFaces.push(...faces);
-        fetched++;
-        setProgress(Math.round((fetched / totalCards) * 100));
-      }
+      processed++;
+      setProgress(50 + Math.round((processed / totalCards) * 50));
     }
 
     showScreen('results');
@@ -2588,6 +2665,7 @@ function saveSettings() {
     gangPrinting: document.getElementById('gang-print-toggle')?.checked || false,
     setCode: document.getElementById('set-code-input')?.value || '',
     cubeId: document.getElementById('cube-id-input')?.value || '',
+    cubePackSize: parseInt(document.getElementById('cube-pack-size')?.value) || 15,
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
 }
@@ -2637,6 +2715,13 @@ function loadSettings() {
       setTimeout(() => {
         const el = document.getElementById('cube-id-input');
         if (el) el.value = data.cubeId;
+      }, 50);
+    }
+    if (data.cubePackSize && data.mode === 'cube') {
+      state.cubePackSize = data.cubePackSize;
+      setTimeout(() => {
+        const el = document.getElementById('cube-pack-size');
+        if (el) el.value = data.cubePackSize;
       }, 50);
     }
   } catch {}
