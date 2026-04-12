@@ -961,10 +961,16 @@
       <div class="results-header">
         <h2 class="results-title" id="results-title">Draft Complete</h2>
         <div class="results-actions">
+          <button class="btn-secondary" id="copy-pool-btn" title="Copy all cards as a text list to clipboard">📋 Copy Pool as Text</button>
           <button class="btn-secondary" id="expand-all-btn">▼ Expand All</button>
           <button class="btn-secondary" id="print-all-btn" style="display:none">Print All Packs</button>
           <button class="btn-cancel-print" id="cancel-print-btn" style="display:none">Cancel Print</button>
-          <label class="thermal-toggle-wrap toggle-row" title="Preview cards as they would appear on thermal printer">
+          <label class="thermal-toggle-wrap toggle-row" title="Print ( ) card lines on each pack slip before the proxy images (not shown in the browser)">
+            <input type="checkbox" id="include-checklist-headers-toggle">
+            <span class="toggle-track"></span>
+            <span class="toggle-label">Print checklists</span>
+          </label>
+          <label class="thermal-toggle-wrap toggle-row" title="Preview cards as on the thermal printer. Renders only for expanded packs (expand or Print Pack) so large drafts stay light.">
             <input type="checkbox" id="thermal-preview-toggle">
             <span class="toggle-track"></span>
             <span class="toggle-label">Thermal Preview</span>
@@ -1013,6 +1019,7 @@
   </main>
 </div>
 
+<script src="setlist.js"></script>
 <script src="nicknames.js"></script>
 <script>
 'use strict';
@@ -1203,8 +1210,64 @@ const CHAOS_EXCLUDED_SETS = new Set([
   'j22',   // Jumpstart 2022
 ]);
 
+// Format windows (Modern / Pioneer) — upper bound is "released through today" in the browser.
+const MODERN_FIRST_RELEASE = '2003-07-28';   // Eighth Edition
+const PIONEER_FIRST_RELEASE = '2012-10-05';  // Return to Ravnica
+
+const STANDARD_SET_CODES_CACHE_KEY = 'mtg_chaos_standard_set_codes';
+const STANDARD_SET_CODES_CACHE_MS = 24 * 60 * 60 * 1000;
+
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function fetchStandardLegalSetCodes() {
+  try {
+    const raw = sessionStorage.getItem(STANDARD_SET_CODES_CACHE_KEY);
+    if (raw) {
+      const { t, codes } = JSON.parse(raw);
+      if (Date.now() - t < STANDARD_SET_CODES_CACHE_MS && Array.isArray(codes) && codes.length)
+        return new Set(codes);
+    }
+  } catch {}
+
+  setStatus('Resolving Standard-legal sets for Chaos...');
+  const codes = new Set();
+  let url = 'https://api.scryfall.com/cards/search?q=legal%3Astandard&unique=cards';
+  while (url) {
+    const res = await rateLimitedGet(url);
+    if (!res || res.status !== 200) return null;
+    const data = await res.json();
+    for (const c of data.data || []) {
+      if (c.set) codes.add(c.set);
+    }
+    url = data.next_page;
+  }
+  try {
+    sessionStorage.setItem(STANDARD_SET_CODES_CACHE_KEY, JSON.stringify({ t: Date.now(), codes: [...codes] }));
+  } catch {}
+  return codes;
+}
+
+function chaosSetMatchesFormat(s, standardCodes) {
+  const rel = s.released_at || '0000-00-00';
+  const fmt = state.chaosFormat || 'full';
+
+  if (fmt === 'full') return true;
+  if (fmt === 'standard') return standardCodes && standardCodes.has(s.code);
+  if (fmt === 'modern') return rel >= MODERN_FIRST_RELEASE && rel <= todayISODate();
+  if (fmt === 'pioneer') return rel >= PIONEER_FIRST_RELEASE && rel <= todayISODate();
+  return true;
+}
+
 async function getAllChaosSets() {
   setStatus('Fetching valid sets for Chaos Draft...');
+  let standardCodes = null;
+  if (state.chaosFormat === 'standard') {
+    standardCodes = await fetchStandardLegalSetCodes();
+    if (!standardCodes || !standardCodes.size) return [];
+  }
+
   const res = await rateLimitedGet('https://api.scryfall.com/sets');
   if (res && res.status === 200) {
     const data = await res.json();
@@ -1214,7 +1277,8 @@ async function getAllChaosSets() {
         validTypes.has(s.set_type) &&
         !s.digital &&
         !s.parent_set_code &&
-        !CHAOS_EXCLUDED_SETS.has(s.code)
+        !CHAOS_EXCLUDED_SETS.has(s.code) &&
+        chaosSetMatchesFormat(s, standardCodes)
       )
       .map(s => s.code);
   }
@@ -1289,6 +1353,15 @@ async function buildPools(setCode) {
   }
 
   return { pools, isPlayBooster, setName, releaseDate };
+}
+
+function getBoosterLabel(setCode, isPlayBooster) {
+  if (['arn','atq','drk','fem','hml'].includes(setCode)) return '8-Card Vintage Pack';
+  if (['chr','all'].includes(setCode)) return '12-Card Vintage Pack';
+  if (['2xm','2x2'].includes(setCode)) return 'Double Masters (15 cards)';
+  if (['cmr','clb'].includes(setCode)) return 'Commander Legends (20 cards)';
+  if (isPlayBooster) return 'Play Booster (MKM+)';
+  return '15-Card Draft Booster';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1517,6 +1590,28 @@ function parseScryfallCard(card) {
   return faces;
 }
 
+// One display name per physical card (DFCs use "Front // Back").
+function cardDisplayNamesFromFaces(faces) {
+  const names = [];
+  let i = 0;
+  while (i < faces.length) {
+    const face = faces[i];
+    if (face.isDFC && face.dfcSide === 'front' && faces[i + 1]?.dfcSide === 'back') {
+      const back = faces[i + 1];
+      names.push(`${face.name || '?'} // ${back.name || '?'}`);
+      i += 2;
+    } else {
+      names.push(face.name || 'Unknown');
+      i++;
+    }
+  }
+  return names;
+}
+
+function checklistLinesFromCardNames(names) {
+  return names.map(n => `( ) ${n}`);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // APP STATE
 // ═══════════════════════════════════════════════════════════════
@@ -1530,10 +1625,12 @@ const state = {
   includeTokens: false,
   retroMode: false,
   thermalPreview: false,
+  includeChecklistHeaders: false,
   gangPrinting: false,
   isPrintingCanceled: false,
   isPrinting: false,
   cubePackSize: 15,
+  chaosFormat: 'full',
   allPackFaces: [],
   allPackHeaders: [],
 };
@@ -1698,6 +1795,103 @@ function rarityColor(r) {
   return { C: 'C', U: 'U', R: 'R', M: 'M' }[r] || 'C';
 }
 
+/** 1×1 transparent GIF — real Scryfall URLs live in data-lazy-src until the pack is expanded. */
+const LAZY_CARD_IMG_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+function setCardImgLazy(img, uri) {
+  if (!img) return;
+  img.loading = 'lazy';
+  if (!uri) {
+    img.removeAttribute('src');
+    delete img.dataset.lazySrc;
+    return;
+  }
+  img.dataset.lazySrc = uri;
+  img.src = LAZY_CARD_IMG_PLACEHOLDER;
+  img.onerror = () => { img.style.display = 'none'; };
+}
+
+function hydrateLazyCardImg(img) {
+  if (!img?.dataset.lazySrc) return Promise.resolve();
+  const uri = img.dataset.lazySrc;
+  return new Promise((resolve) => {
+    const finish = () => {
+      delete img.dataset.lazySrc;
+      resolve();
+    };
+    img.onload = finish;
+    img.onerror = () => {
+      img.style.display = 'none';
+      finish();
+    };
+    img.src = uri;
+  });
+}
+
+function hydrateCardItemImages(item) {
+  const imgs = item.querySelectorAll('img[data-lazy-src]');
+  return Promise.all([...imgs].map(hydrateLazyCardImg));
+}
+
+async function hydratePackBlockImages(block) {
+  const items = block.querySelectorAll('.card-item');
+  await Promise.all([...items].map(hydrateCardItemImages));
+}
+
+function resetCardItemImagesToLazy(item) {
+  const faces = item._faces;
+  if (!faces) return;
+  item.classList.remove('flipped');
+  const front = item.querySelector('.card-front');
+  const back = item.querySelector('.card-back');
+  if (front) setCardImgLazy(front, faces[0]?.imageUri || '');
+  if (back && faces[1]) setCardImgLazy(back, faces[1].imageUri || '');
+}
+
+function resetBlockImagesToLazy(block) {
+  for (const item of block.querySelectorAll('.card-item')) resetCardItemImagesToLazy(item);
+}
+
+async function applyThermalPreviewToCardItems(items) {
+  let n = 0;
+  for (const item of items) {
+    const faces = item._faces;
+    if (!faces) continue;
+    const frontImg = item.querySelector('.card-front');
+    const backImg = item.querySelector('.card-back');
+    if (frontImg && faces[0]) {
+      try {
+        const canvas = await renderCardToCanvas(faces[0]);
+        frontImg.src = canvas.toDataURL('image/png');
+        delete frontImg.dataset.lazySrc;
+      } catch { /* keep placeholder or prior src */ }
+    }
+    if (backImg && faces[1]) {
+      try {
+        const canvas = await renderCardToCanvas(faces[1]);
+        backImg.src = canvas.toDataURL('image/png');
+        delete backImg.dataset.lazySrc;
+      } catch { /* keep */ }
+    }
+    n++;
+    if (n % 12 === 0) await sleep(0);
+  }
+}
+
+async function applyThermalPreviewToScope(scopeEl) {
+  await applyThermalPreviewToCardItems(scopeEl.querySelectorAll('.card-item'));
+}
+
+async function onPackSectionExpanded(block, isExpanded) {
+  if (!block) return;
+  if (isExpanded) {
+    if (state.thermalPreview) await applyThermalPreviewToScope(block);
+    else await hydratePackBlockImages(block);
+  } else {
+    resetBlockImagesToLazy(block);
+  }
+}
+
 function buildCardElement(face, isBack = false) {
   const item = document.createElement('div');
   item.className = 'card-item';
@@ -1708,10 +1902,8 @@ function buildCardElement(face, isBack = false) {
     // DFC: show front + back, with flip button
     const frontImg = document.createElement('img');
     frontImg.className = 'card-front';
-    frontImg.src = face.imageUri || '';
     frontImg.alt = face.name;
-    frontImg.loading = 'lazy';
-    frontImg.onerror = () => { frontImg.style.display = 'none'; };
+    setCardImgLazy(frontImg, face.imageUri || '');
     item.appendChild(frontImg);
 
     // We need the back face info -- it comes in the next face object
@@ -1720,10 +1912,8 @@ function buildCardElement(face, isBack = false) {
   } else {
     const img = document.createElement('img');
     img.className = 'card-front';
-    img.src = face.imageUri || '';
     img.alt = face.name;
-    img.loading = 'lazy';
-    img.onerror = () => { img.style.display = 'none'; };
+    setCardImgLazy(img, face.imageUri || '');
     item.appendChild(img);
   }
 
@@ -1743,18 +1933,14 @@ function buildDFCElement(frontFace, backFace) {
 
   const frontImg = document.createElement('img');
   frontImg.className = 'card-front';
-  frontImg.src = frontFace.imageUri || '';
   frontImg.alt = frontFace.name;
-  frontImg.loading = 'lazy';
-  frontImg.onerror = () => { frontImg.style.display = 'none'; };
+  setCardImgLazy(frontImg, frontFace.imageUri || '');
   item.appendChild(frontImg);
 
   const backImg = document.createElement('img');
   backImg.className = 'card-back';
-  backImg.src = backFace.imageUri || '';
   backImg.alt = backFace.name;
-  backImg.loading = 'lazy';
-  backImg.onerror = () => { backImg.style.display = 'none'; };
+  setCardImgLazy(backImg, backFace.imageUri || '');
   item.appendChild(backImg);
 
   const gem = document.createElement('div');
@@ -1802,6 +1988,7 @@ function renderPackBlock(header, cards) {
     ph.setAttribute('aria-expanded', String(isExpanded));
     const chevron = ph.querySelector('.pack-chevron');
     if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
+    void onPackSectionExpanded(block, isExpanded);
   };
   ph.addEventListener('click', (e) => {
     if (e.target.closest('.pack-print-btn')) return;
@@ -2052,6 +2239,13 @@ async function generateDraft() {
       const rawCode = document.getElementById('set-code-input')?.value.trim().toLowerCase() || '';
       if (!rawCode) { showScreen('setup'); genBtn.disabled = false; return; }
 
+      if (typeof SCRYFALL_SETS !== 'undefined' && !SCRYFALL_SETS[rawCode]) {
+        showError(`"${rawCode}" is not a valid set code. Check scryfall.com/sets for codes.`);
+        showScreen('setup');
+        genBtn.disabled = false;
+        return;
+      }
+
       state.setCode = rawCode || 'dft';
       draftSequence = Array(state.numPacks).fill(state.setCode);
       titleStr = `Set Draft`;
@@ -2060,6 +2254,8 @@ async function generateDraft() {
     const total = draftSequence.length;
     let done = 0;
     const pendingPacks = [];
+    const chaosPoolBuildFailed = new Set();
+    let chaosReplaceAttempts = 0;
 
     // ── Fetch all pools and roll all packs on the progress screen ──
     for (let packIdx = 0; packIdx < draftSequence.length; packIdx++) {
@@ -2089,9 +2285,30 @@ async function generateDraft() {
           const result = await buildPools(currentCode);
           if (!result) {
             if (state.mode === 'chaos') {
-              setStatus(`Skipping ${currentCode} -- pool build failed.`);
-              const remaining = validChaosSets.filter(s => !draftSequence.includes(s));
-              if (remaining.length) draftSequence[packIdx] = remaining[Math.floor(Math.random() * remaining.length)];
+              chaosPoolBuildFailed.add(currentCode);
+              setStatus(`Skipping ${currentCode} — pool build failed, picking another set...`);
+
+              let candidates = validChaosSets.filter(
+                s => !draftSequence.includes(s) && !chaosPoolBuildFailed.has(s)
+              );
+              if (!candidates.length) {
+                candidates = validChaosSets.filter(s => !chaosPoolBuildFailed.has(s));
+              }
+              if (!candidates.length) {
+                candidates = validChaosSets.filter(s => s !== currentCode);
+              }
+              if (!candidates.length) {
+                showError('Chaos draft: no other sets left in this format pool. Try fewer packs or a wider pool (e.g. Full chaos).');
+                break;
+              }
+
+              chaosReplaceAttempts++;
+              if (chaosReplaceAttempts > Math.max(validChaosSets.length * 3, 40)) {
+                showError('Chaos draft: too many pool build failures in a row. Check your connection or try again.');
+                break;
+              }
+
+              draftSequence[packIdx] = candidates[Math.floor(Math.random() * candidates.length)];
               packIdx--;
               continue;
             }
@@ -2099,10 +2316,13 @@ async function generateDraft() {
             break;
           }
           poolCache[currentCode] = result;
+          chaosReplaceAttempts = 0;
+        } else if (state.mode === 'chaos') {
+          chaosReplaceAttempts = 0;
         }
 
         const { pools, isPlayBooster, setName, releaseDate } = poolCache[currentCode];
-        const boosterType = isPlayBooster ? 'Play Booster' : 'Draft Booster';
+        const boosterType = getBoosterLabel(currentCode, isPlayBooster);
 
         let packTitle, packMeta;
         if (state.mode === 'block') {
@@ -2203,15 +2423,49 @@ function renderModeInputs(mode) {
         <p class="hint">Find set codes on <a href="https://scryfall.com/sets" target="_blank">Scryfall Sets</a>.</p>
       </div>`;
     document.getElementById('packs-group').querySelector('label').textContent = 'Number of Packs';
-    document.getElementById('set-code-input').addEventListener('keydown', (e) => {
+    const setInput = document.getElementById('set-code-input');
+    const genBtn = document.getElementById('generate-btn');
+    setInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); document.getElementById('num-packs').focus(); }
+    });
+    setInput.addEventListener('input', () => {
+      if (typeof SCRYFALL_SETS === 'undefined') return;
+      const code = setInput.value.trim().toLowerCase();
+      genBtn.disabled = code.length > 0 && !SCRYFALL_SETS[code];
     });
 
   } else if (mode === 'chaos') {
     container.innerHTML = `
       <div class="form-group">
         <p class="hint" style="font-size:0.9rem;color:var(--text2)">Each pack comes from a different random draftable set. No duplicates.</p>
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <label style="font-size:0.85rem;color:var(--text);font-weight:600">Format pool</label>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <label class="toggle-row" style="font-size:0.84rem">
+            <input type="radio" name="chaos-format" value="full" checked style="accent-color:var(--accent)">
+            <span style="color:var(--text2)">Full chaos (all paper draftable sets)</span>
+          </label>
+          <label class="toggle-row" style="font-size:0.84rem">
+            <input type="radio" name="chaos-format" value="standard" style="accent-color:var(--accent)">
+            <span style="color:var(--text2)">Standard (sets with Standard-legal cards)</span>
+          </label>
+          <label class="toggle-row" style="font-size:0.84rem">
+            <input type="radio" name="chaos-format" value="modern" style="accent-color:var(--accent)">
+            <span style="color:var(--text2)">Modern (8th Edition through today)</span>
+          </label>
+          <label class="toggle-row" style="font-size:0.84rem">
+            <input type="radio" name="chaos-format" value="pioneer" style="accent-color:var(--accent)">
+            <span style="color:var(--text2)">Pioneer (Return to Ravnica through today)</span>
+          </label>
+        </div>
       </div>`;
+    const savedFmt = state.chaosFormat || 'full';
+    const radio = container.querySelector(`input[name="chaos-format"][value="${savedFmt}"]`);
+    if (radio) radio.checked = true;
+    container.querySelectorAll('input[name="chaos-format"]').forEach(r => {
+      r.addEventListener('change', () => { state.chaosFormat = r.value; saveSettings(); });
+    });
 
   } else if (mode === 'block') {
     const blockNames = Object.keys(HISTORICAL_BLOCKS);
@@ -2354,43 +2608,35 @@ async function toggleThermalPreview(enabled) {
   const allItems = document.querySelectorAll('#packs-container .card-item, #tokens-container .card-item');
   if (!allItems.length) return;
 
-  setPrintingIndicator(enabled ? 'Rendering thermal previews...' : 'Restoring card images...');
-  let processed = 0;
-
-  for (const item of allItems) {
-    const faces = item._faces;
-    if (!faces) continue;
-
-    const frontImg = item.querySelector('.card-front');
-    const backImg = item.querySelector('.card-back');
-
-    if (enabled) {
-      if (frontImg && !item._originalFrontSrc) item._originalFrontSrc = frontImg.src;
-      if (backImg && !item._originalBackSrc) item._originalBackSrc = backImg.src;
-
-      if (frontImg && faces[0]) {
-        try {
-          const canvas = await renderCardToCanvas(faces[0]);
-          frontImg.src = canvas.toDataURL('image/png');
-        } catch { /* keep original */ }
-      }
-      if (backImg && faces[1]) {
-        try {
-          const canvas = await renderCardToCanvas(faces[1]);
-          backImg.src = canvas.toDataURL('image/png');
-        } catch { /* keep original */ }
-      }
-    } else {
-      if (frontImg && item._originalFrontSrc) frontImg.src = item._originalFrontSrc;
-      if (backImg && item._originalBackSrc) backImg.src = item._originalBackSrc;
+  if (enabled) {
+    const blocks = [...document.querySelectorAll('#packs-container .pack-block.expanded')];
+    const tokSec = document.getElementById('tokens-section');
+    if (tokSec?.classList.contains('expanded')) blocks.push(tokSec);
+    if (!blocks.length) {
+      setPrintingIndicator('Thermal preview: expand a pack to render (or Expand All).');
+      setTimeout(() => setPrintingIndicator(''), 4500);
+      return;
     }
+    setPrintingIndicator('Rendering thermal previews…');
+    for (const block of blocks) await applyThermalPreviewToScope(block);
+    setPrintingIndicator('');
+    return;
+  }
 
+  setPrintingIndicator('Restoring card images…');
+  let processed = 0;
+  for (const item of allItems) {
+    resetCardItemImagesToLazy(item);
     processed++;
-    if (processed % 20 === 0) {
-      setPrintingIndicator(`${enabled ? 'Rendering' : 'Restoring'} ${processed}/${allItems.length}...`);
-      await sleep(0); // yield to UI thread
+    if (processed % 30 === 0) {
+      setPrintingIndicator(`Restoring card images… ${processed}/${allItems.length}`);
+      await sleep(0);
     }
   }
+  const expandedBlocks = [...document.querySelectorAll('#packs-container .pack-block.expanded')];
+  const tokSec2 = document.getElementById('tokens-section');
+  if (tokSec2?.classList.contains('expanded')) expandedBlocks.push(tokSec2);
+  for (const block of expandedBlocks) await hydratePackBlockImages(block);
   setPrintingIndicator('');
 }
 
@@ -2656,6 +2902,7 @@ async function loadCardList() {
       const chevron = packBlock.querySelector('.pack-chevron');
       if (chevron) chevron.textContent = '▼';
       packsContainer.appendChild(packBlock);
+      void onPackSectionExpanded(packBlock, true);
     }
 
     setProgress(100);
@@ -2752,6 +2999,7 @@ async function addMoreCards() {
 
       existingFaces.push(...newFaces);
 
+      const newCardItems = [];
       i = 0;
       while (i < newFaces.length) {
         const face = newFaces[i];
@@ -2775,7 +3023,15 @@ async function addMoreCards() {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard(e); }
         });
         grid.appendChild(el);
+        newCardItems.push(el);
         cardGroupIdx++;
+      }
+
+      if (existingBlock.classList.contains('expanded') && newCardItems.length) {
+        void (async () => {
+          if (state.thermalPreview) await applyThermalPreviewToCardItems(newCardItems);
+          else await Promise.all(newCardItems.map(hydrateCardItemImages));
+        })();
       }
 
       // Update badge counts
@@ -2813,15 +3069,20 @@ async function addMoreCards() {
 const LS_KEY = 'mtg_draft_settings';
 
 function saveSettings() {
+  const clChk = document.getElementById('include-checklist-headers-toggle');
+  if (clChk) state.includeChecklistHeaders = clChk.checked;
+
   const data = {
     mode: state.mode,
     numPacks: state.numPacks,
     numDrafters: state.numDrafters,
     includeTokens: state.includeTokens,
     gangPrinting: document.getElementById('gang-print-toggle')?.checked || false,
+    includeChecklistHeaders: state.includeChecklistHeaders,
     setCode: document.getElementById('set-code-input')?.value || '',
     cubeId: document.getElementById('cube-id-input')?.value || '',
     cubePackSize: parseInt(document.getElementById('cube-pack-size')?.value) || 15,
+    chaosFormat: state.chaosFormat,
   };
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
 }
@@ -2860,11 +3121,22 @@ function loadSettings() {
       const el = document.getElementById('gang-print-toggle');
       if (el) el.checked = data.gangPrinting;
     }
+    if (data.includeChecklistHeaders != null) {
+      state.includeChecklistHeaders = data.includeChecklistHeaders;
+      const cl = document.getElementById('include-checklist-headers-toggle');
+      if (cl) cl.checked = data.includeChecklistHeaders;
+    }
+    if (data.chaosFormat) {
+      state.chaosFormat = data.chaosFormat;
+    } else if (data.chaosEra) {
+      const m = { all: 'full', 'modern-frame': 'modern', 'modern-era': 'pioneer' };
+      state.chaosFormat = m[data.chaosEra] || 'full';
+    }
     // Set code / cube ID are restored when their mode panel renders
     if (data.setCode && data.mode === 'set') {
       setTimeout(() => {
         const el = document.getElementById('set-code-input');
-        if (el) el.value = data.setCode;
+        if (el) { el.value = data.setCode; el.dispatchEvent(new Event('input')); }
       }, 50);
     }
     if (data.cubeId && data.mode === 'cube') {
@@ -2931,21 +3203,63 @@ function init() {
     await generateDraft();
   });
 
+  // Copy Pool as Text
+  document.getElementById('copy-pool-btn').addEventListener('click', async () => {
+    const lines = [];
+    for (let p = 0; p < state.allPackFaces.length; p++) {
+      const hdr = state.allPackHeaders[p];
+      lines.push(`// ${hdr.title} — ${hdr.setName} [${hdr.type}]`);
+      const seen = new Set();
+      for (const face of state.allPackFaces[p]) {
+        if (face.isDFC && face.dfcSide === 'back') continue;
+        const name = face.name || 'Unknown';
+        if (!seen.has(name)) { lines.push(name); seen.add(name); }
+      }
+      lines.push('');
+    }
+    const text = lines.join('\n').trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copy-pool-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      const btn = document.getElementById('copy-pool-btn');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+  });
+
   // Expand / Collapse All
   const expandAllBtn = document.getElementById('expand-all-btn');
   expandAllBtn.addEventListener('click', () => {
-    const allBlocks = document.querySelectorAll('#packs-container .pack-block, #tokens-section.pack-block');
-    const allExpanded = Array.from(allBlocks).every(b => b.classList.contains('expanded'));
-    allBlocks.forEach(b => {
-      b.classList.toggle('expanded', !allExpanded);
+    const blocksArr = [...document.querySelectorAll('#packs-container .pack-block, #tokens-section.pack-block')];
+    const wasExpanded = blocksArr.map(b => b.classList.contains('expanded'));
+    const allExpanded = wasExpanded.every(Boolean);
+    const nextExpanded = !allExpanded;
+    blocksArr.forEach(b => {
+      b.classList.toggle('expanded', nextExpanded);
       const ph = b.querySelector('.pack-header');
       if (ph) {
-        ph.setAttribute('aria-expanded', String(!allExpanded));
+        ph.setAttribute('aria-expanded', String(nextExpanded));
         const chevron = ph.querySelector('.pack-chevron');
-        if (chevron) chevron.textContent = !allExpanded ? '▼' : '►';
+        if (chevron) chevron.textContent = nextExpanded ? '▼' : '►';
       }
     });
     expandAllBtn.textContent = allExpanded ? '▼ Expand All' : '► Collapse All';
+    void (async () => {
+      for (let i = 0; i < blocksArr.length; i++) {
+        if (wasExpanded[i] !== nextExpanded) await onPackSectionExpanded(blocksArr[i], nextExpanded);
+      }
+    })();
   });
 
   // New draft button
@@ -2973,6 +3287,11 @@ function init() {
   // Thermal Preview toggle
   document.getElementById('thermal-preview-toggle').addEventListener('change', (e) => {
     toggleThermalPreview(e.target.checked);
+  });
+
+  document.getElementById('include-checklist-headers-toggle').addEventListener('change', (e) => {
+    state.includeChecklistHeaders = e.target.checked;
+    saveSettings();
   });
 
   // Gang Print checkbox → save settings
@@ -3009,6 +3328,7 @@ function init() {
     tokensHeader.setAttribute('aria-expanded', String(isExpanded));
     const chevron = tokensHeader.querySelector('.pack-chevron');
     if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
+    void onPackSectionExpanded(tokensSection, isExpanded);
   };
   tokensHeader.addEventListener('click', toggleTokens);
   tokensHeader.addEventListener('keydown', (e) => {
@@ -3700,7 +4020,19 @@ async function printPack(faces, header, triggerBtn) {
     await printerSend(new Uint8Array([0x1B, 0x45, 0x01]));
     await printerSend(enc.encode(`--- ${header.title}: ${header.setName} ---\n`));
     await printerSend(new Uint8Array([0x1B, 0x45, 0x00]));
-    await printerSend(enc.encode('================================\n\n'));
+    await printerSend(enc.encode('================================\n'));
+
+    if (state.includeChecklistHeaders) {
+      const listLines = checklistLinesFromCardNames(cardDisplayNamesFromFaces(faces));
+      await printerSend(new Uint8Array([0x1B, 0x61, 0x00]));
+      for (const line of listLines) {
+        await printerSend(enc.encode(line + '\n'));
+      }
+      await printerSend(enc.encode('\n'));
+    }
+
+    await printerSend(new Uint8Array([0x1B, 0x61, 0x01]));
+    await printerSend(enc.encode('\n'));
     await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00]));
     await sleep(1000);
 
