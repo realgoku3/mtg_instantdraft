@@ -290,6 +290,22 @@ input[type=number]::-webkit-inner-spin-button { display: none; }
   padding-left: 2px;
 }
 
+/* Setup-screen utility classes */
+.setup-card-gap { margin-top: 20px; }
+.setup-section-label { font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.setup-inline-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.setup-flex-input { flex: 1; min-width: 160px; }
+.setup-printer-status-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.setup-printer-label-sm { font-size: 0.82rem; }
+.setup-status-sm { font-size: 0.78rem; }
+.form-group-tight { margin-bottom: 12px; }
+.hint-tight { margin-top: 2px; }
+.btn-nowrap { white-space: nowrap; }
+.print-list-textarea { min-height: 130px; font-size: 0.82rem; }
+.add-cards-bar { margin-bottom: 20px; }
+.add-cards-label { font-size: 0.88rem; }
+.add-cards-textarea { min-height: 80px; font-size: 0.82rem; }
+
 .divider { height: 1px; background: var(--border); margin: 20px 0; }
 
 .btn-primary {
@@ -547,14 +563,6 @@ input[type=number]::-webkit-inner-spin-button { display: none; }
 
 /* Tokens section */
 #tokens-section { margin-top: 48px; }
-.section-title {
-  font-family: inherit;
-  font-size: 1.2rem;
-  color: var(--accent);
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
-}
 
 /* Error/info banners */
 .banner {

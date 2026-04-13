@@ -12,8 +12,12 @@
 </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Generate authentic booster draft packs from any Magic: The Gathering set. Set, Chaos, Block, and Cube drafts with optional thermal proxy printing.">
+  <meta property="og:title" content="Instant Draft Machine">
+  <meta property="og:description" content="Generate authentic booster draft packs from any Magic: The Gathering set.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://draft.manaburn.net">
   <title>Instant Draft Machine</title>
-  <!-- terminal-style monospace only; rules in styles.css -->
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -79,34 +83,34 @@
         </button>
       </div>
 
-      <div class="setup-card" style="margin-top: 20px;">
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Quick Print a Single Card</label>
-          <p class="hint" style="margin-top: 2px;">Card name, set+collector (e.g. <code>stx102</code>), or prefix with a number for copies (e.g. <code>4 Lightning Bolt</code>).</p>
+      <div class="setup-card setup-card-gap">
+        <div class="form-group form-group-tight">
+          <label class="setup-section-label">Quick Print a Single Card</label>
+          <p class="hint hint-tight">Card name, set+collector (e.g. <code>stx102</code>), or prefix with a number for copies (e.g. <code>4 Lightning Bolt</code>).</p>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <input type="text" id="setup-quick-print-input" placeholder="e.g. Lightning Bolt, 4 stx102" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 160px;" aria-label="Card name to print">
-          <button class="btn-secondary" id="setup-quick-print-btn" style="white-space: nowrap;">Print Card</button>
+        <div class="setup-inline-row">
+          <input type="text" id="setup-quick-print-input" class="setup-flex-input" placeholder="e.g. Lightning Bolt, 4 stx102" spellcheck="false" autocomplete="off" aria-label="Card name to print">
+          <button class="btn-secondary btn-nowrap" id="setup-quick-print-btn">Print Card</button>
           <button class="btn-secondary" id="setup-printer-connect-btn">Connect Printer</button>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+        <div class="setup-printer-status-row">
           <div class="printer-dot" id="setup-printer-dot"></div>
-          <span class="printer-label" id="setup-printer-label" style="font-size: 0.82rem;">No printer connected</span>
-          <span class="printer-status-text" id="setup-printer-status" style="font-size: 0.78rem;" aria-live="polite"></span>
+          <span class="printer-label setup-printer-label-sm" id="setup-printer-label">No printer connected</span>
+          <span class="printer-status-text setup-status-sm" id="setup-printer-status" aria-live="polite"></span>
         </div>
       </div>
 
-      <div class="setup-card" style="margin-top: 20px;">
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label style="font-size: 0.92rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Print a Card List</label>
-          <p class="hint" style="margin-top: 2px;">Paste a list to print. Format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
+      <div class="setup-card setup-card-gap">
+        <div class="form-group form-group-tight">
+          <label class="setup-section-label">Print a Card List</label>
+          <p class="hint hint-tight">Paste a list to print. Format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
         </div>
-        <div class="form-group" style="margin-bottom: 12px;">
-          <textarea id="print-list-input" placeholder="Paste your card list here..." style="min-height: 130px; font-size: 0.82rem;" aria-label="Card list to print"></textarea>
+        <div class="form-group form-group-tight">
+          <textarea id="print-list-input" class="print-list-textarea" placeholder="Paste your card list here..." aria-label="Card list to print"></textarea>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn-secondary" id="print-list-btn" style="white-space: nowrap;">Load List</button>
-          <span class="printer-status-text" id="print-list-status" style="font-size: 0.78rem;" aria-live="polite"></span>
+        <div class="setup-inline-row">
+          <button class="btn-secondary btn-nowrap" id="print-list-btn">Load List</button>
+          <span class="printer-status-text setup-status-sm" id="print-list-status" aria-live="polite"></span>
         </div>
       </div>
     </section>
@@ -158,17 +162,17 @@
         <button class="btn-printer-connect" id="connect-printer-btn">Connect Printer</button>
       </div>
       <div id="error-banner" role="alert" aria-live="assertive"></div>
-      <div id="add-cards-bar" class="setup-card" style="display:none; margin-bottom: 20px;">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label style="font-size: 0.88rem; color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0;">Add More Cards</label>
-          <p class="hint" style="margin-top: 2px;">Same format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
+      <div id="add-cards-bar" class="setup-card add-cards-bar" style="display:none">
+        <div class="form-group form-group-tight">
+          <label class="setup-section-label add-cards-label">Add More Cards</label>
+          <p class="hint hint-tight">Same format: <code>[qty] [name] ([set]) [collector#]</code>, <code>[qty] [name]</code>, or just <code>[name]</code></p>
         </div>
-        <div class="form-group" style="margin-bottom: 10px;">
-          <textarea id="add-cards-input" placeholder="Paste additional cards here..." style="min-height: 80px; font-size: 0.82rem;" aria-label="Additional cards to add"></textarea>
+        <div class="form-group form-group-tight">
+          <textarea id="add-cards-input" class="add-cards-textarea" placeholder="Paste additional cards here..." aria-label="Additional cards to add"></textarea>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button class="btn-secondary" id="add-cards-btn" style="white-space: nowrap;">Add to List</button>
-          <span class="printer-status-text" id="add-cards-status" style="font-size: 0.78rem;" aria-live="polite"></span>
+        <div class="setup-inline-row">
+          <button class="btn-secondary btn-nowrap" id="add-cards-btn">Add to List</button>
+          <span class="printer-status-text setup-status-sm" id="add-cards-status" aria-live="polite"></span>
         </div>
       </div>
       <div id="packs-container"></div>

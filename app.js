@@ -19,6 +19,8 @@ const BONUS_SHEETS = {
   fdn: ['spg'],
 };
 
+// Two-set blocks intentionally repeat the large set so each drafter gets
+// 2 packs of the large set + 1 of the small set (historical draft format).
 const HISTORICAL_BLOCKS = {
   'ice age':              ['ice', 'all', 'csp'],
   'mirage':               ['mir', 'vis', 'wth'],
@@ -139,6 +141,7 @@ async function fetchCardsCollection(identifiers) {
   const found = [];
   const notFound = [];
   const BATCH = 75;
+  const MAX_RETRIES = 5;
 
   for (let i = 0; i < identifiers.length; i += BATCH) {
     const batch = identifiers.slice(i, i + BATCH);
@@ -147,22 +150,57 @@ async function fetchCardsCollection(identifiers) {
     const wait = mySlot - Date.now();
     if (wait > 0) await sleep(wait);
 
-    const res = await fetch('https://api.scryfall.com/cards/collection', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ identifiers: batch }),
-    });
+    let retries = 0;
+    while (true) {
+      const res = await fetch('https://api.scryfall.com/cards/collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ identifiers: batch }),
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      found.push(...(data.data || []));
-      notFound.push(...(data.not_found || []));
-    } else if (res.status === 429) {
-      await sleep(2000);
-      i -= BATCH;
+      if (res.ok) {
+        const data = await res.json();
+        found.push(...(data.data || []));
+        notFound.push(...(data.not_found || []));
+        break;
+      } else if (res.status === 429 && retries < MAX_RETRIES) {
+        retries++;
+        await sleep(2000 * retries);
+      } else {
+        break;
+      }
     }
   }
   return { found, notFound };
+}
+
+function entryLookupKey(entry) {
+  return (entry.set && entry.collectorNumber)
+    ? `sc:${entry.set}/${entry.collectorNumber}`
+    : `n:${entry.name.toLowerCase()}`;
+}
+
+async function batchFetchCardLookup(entries) {
+  const seenKeys = new Set();
+  const idList = [];
+  for (const entry of entries) {
+    const key = entryLookupKey(entry);
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      idList.push((entry.set && entry.collectorNumber)
+        ? { set: entry.set, collector_number: entry.collectorNumber }
+        : { name: entry.name });
+    }
+  }
+  const { found, notFound } = await fetchCardsCollection(idList);
+  const lookup = {};
+  for (const card of found) {
+    if (card.set && card.collector_number) {
+      lookup[`sc:${card.set}/${card.collector_number}`] = card;
+    }
+    lookup[`n:${(card.name || '').toLowerCase()}`] = card;
+  }
+  return { lookup, uniqueCount: idList.length, notFound };
 }
 
 async function getCubeList(cubeId) {
@@ -566,22 +604,29 @@ function parseScryfallCard(card) {
   return faces;
 }
 
-// One display name per physical card (DFCs use "Front // Back").
-function cardDisplayNamesFromFaces(faces) {
-  const names = [];
+// Group a flat face array into physical cards: single-face → [face], DFC → [front, back].
+function groupDFCFaces(faces) {
+  const groups = [];
   let i = 0;
   while (i < faces.length) {
     const face = faces[i];
     if (face.isDFC && face.dfcSide === 'front' && faces[i + 1]?.dfcSide === 'back') {
-      const back = faces[i + 1];
-      names.push(`${face.name || '?'} // ${back.name || '?'}`);
+      groups.push([face, faces[i + 1]]);
       i += 2;
     } else {
-      names.push(face.name || 'Unknown');
+      groups.push([face]);
       i++;
     }
   }
-  return names;
+  return groups;
+}
+
+function cardDisplayNamesFromFaces(faces) {
+  return groupDFCFaces(faces).map(group =>
+    group.length > 1
+      ? `${group[0].name || '?'} // ${group[1].name || '?'}`
+      : group[0].name || 'Unknown'
+  );
 }
 
 function checklistLinesFromCardNames(names) {
@@ -767,6 +812,25 @@ function showScreen(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function openHelpModal() {
+  const overlay = document.getElementById('help-overlay');
+  const btn = document.getElementById('help-btn');
+  const closeBtn = document.getElementById('help-modal-close');
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  btn.setAttribute('aria-expanded', 'true');
+  closeBtn.focus();
+}
+
+function closeHelpModal() {
+  const overlay = document.getElementById('help-overlay');
+  const btn = document.getElementById('help-btn');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.focus();
+}
+
 function rarityColor(r) {
   return { C: 'C', U: 'U', R: 'R', M: 'M' }[r] || 'C';
 }
@@ -868,30 +932,17 @@ async function onPackSectionExpanded(block, isExpanded) {
   }
 }
 
-function buildCardElement(face, isBack = false) {
+function buildCardElement(face) {
   const item = document.createElement('div');
   item.className = 'card-item';
   item._faces = [face];
   item.title = `${face.name}${face.manaCost ? '  ' + face.manaCost : ''}`;
 
-  if (face.isDFC && !isBack) {
-    // DFC: show front + back, with flip button
-    const frontImg = document.createElement('img');
-    frontImg.className = 'card-front';
-    frontImg.alt = face.name;
-    setCardImgLazy(frontImg, face.imageUri || '');
-    item.appendChild(frontImg);
-
-    // We need the back face info -- it comes in the next face object
-    // The caller handles both faces for DFC, we store the back URI in dataset
-    item.dataset.frontUri = face.imageUri || '';
-  } else {
-    const img = document.createElement('img');
-    img.className = 'card-front';
-    img.alt = face.name;
-    setCardImgLazy(img, face.imageUri || '');
-    item.appendChild(img);
-  }
+  const img = document.createElement('img');
+  img.className = 'card-front';
+  img.alt = face.name;
+  setCardImgLazy(img, face.imageUri || '');
+  item.appendChild(img);
 
   const gem = document.createElement('div');
   gem.className = `rarity-gem ${rarityColor(face.rarity)}`;
@@ -990,18 +1041,10 @@ function renderPackBlock(header, cards) {
   grid.className = 'card-grid';
 
   const packIdx = state.allPackFaces.length - 1;
-  let i = 0;
-  let cardGroupIdx = 0;
-  while (i < cards.length) {
-    const face = cards[i];
-    let el;
-    if (face.isDFC && face.dfcSide === 'front' && cards[i + 1]?.dfcSide === 'back') {
-      el = buildDFCElement(face, cards[i + 1]);
-      i += 2;
-    } else {
-      el = buildCardElement(face);
-      i++;
-    }
+  groupDFCFaces(cards).forEach((group, cardGroupIdx) => {
+    const el = group.length > 1
+      ? buildDFCElement(group[0], group[1])
+      : buildCardElement(group[0]);
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'button');
     const capturedIdx = cardGroupIdx;
@@ -1015,8 +1058,7 @@ function renderPackBlock(header, cards) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard(e); }
     });
     grid.appendChild(el);
-    cardGroupIdx++;
-  }
+  });
 
   block.appendChild(grid);
   return block;
@@ -1144,42 +1186,16 @@ async function generateDraft() {
       const cardsNeeded = state.numPacks * state.cubePackSize;
       const slotsToFetch = cubeSlots.slice(0, cardsNeeded);
 
-      // Deduplicate into unique identifiers for batch fetch
-      const uniqueIds = new Map();
-      for (const slot of slotsToFetch) {
-        const key = (slot.set && slot.collectorNumber)
-          ? `sc:${slot.set}/${slot.collectorNumber}`
-          : `n:${slot.name.toLowerCase()}`;
-        if (!uniqueIds.has(key)) {
-          uniqueIds.set(key, (slot.set && slot.collectorNumber)
-            ? { set: slot.set, collector_number: slot.collectorNumber }
-            : { name: slot.name });
-        }
-      }
-
-      setStatus(`Fetching ${uniqueIds.size} unique card(s) for cube...`);
+      setStatus('Fetching cube cards...');
       setProgress(5);
 
-      const { found: batchFound, notFound: batchNotFound } = await fetchCardsCollection([...uniqueIds.values()]);
-
-      // Build lookup from results
-      const cardLookup = {};
-      for (const card of batchFound) {
-        if (card.set && card.collector_number) {
-          cardLookup[`sc:${card.set}/${card.collector_number}`] = card;
-        }
-        cardLookup[`n:${(card.name || '').toLowerCase()}`] = card;
-      }
+      const { lookup: cardLookup } = await batchFetchCardLookup(slotsToFetch);
 
       setProgress(25);
 
-      // Map slots back to fetched card objects
       const cubePool = [];
       for (const slot of slotsToFetch) {
-        const key = (slot.set && slot.collectorNumber)
-          ? `sc:${slot.set}/${slot.collectorNumber}`
-          : `n:${slot.name.toLowerCase()}`;
-        const card = cardLookup[key];
+        const card = cardLookup[entryLookupKey(slot)];
         if (card) cubePool.push(card);
       }
 
@@ -1498,9 +1514,6 @@ function renderModeInputs(mode) {
     cubeInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); document.getElementById('cube-pack-size').focus(); }
     });
-    document.getElementById('cube-paste').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('cube-pack-size').focus(); }
-    });
     document.getElementById('cube-pack-size').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); document.getElementById('num-packs').focus(); }
     });
@@ -1683,18 +1696,7 @@ async function quickPrintFrom(inputId) {
     const faces = parseScryfallCard(card);
     state.isPrintingCanceled = false;
 
-    const groups = [];
-    let i = 0;
-    while (i < faces.length) {
-      const face = faces[i];
-      if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
-        groups.push([face, faces[i+1]]);
-        i += 2;
-      } else {
-        groups.push([face]);
-        i++;
-      }
-    }
+    const groups = groupDFCFaces(faces);
 
     await printerSend(new Uint8Array([0x1B, 0x40]));
 
@@ -1808,42 +1810,15 @@ async function loadCardList() {
   const skipped = [];
 
   try {
-    // Build unique identifiers for batch fetch
-    const seenKeys = new Set();
-    const idList = [];
-    for (const entry of entries) {
-      const key = (entry.set && entry.collectorNumber)
-        ? `sc:${entry.set}/${entry.collectorNumber}`
-        : `n:${entry.name.toLowerCase()}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        idList.push((entry.set && entry.collectorNumber)
-          ? { set: entry.set, collector_number: entry.collectorNumber }
-          : { name: entry.name });
-      }
-    }
-
-    setStatus(`Fetching ${idList.length} unique card(s)...`);
+    setStatus('Fetching cards...');
     setProgress(10);
-    const { found: batchFound, notFound: batchNotFound } = await fetchCardsCollection(idList);
-
-    const cardLookup = {};
-    for (const card of batchFound) {
-      if (card.set && card.collector_number) {
-        cardLookup[`sc:${card.set}/${card.collector_number}`] = card;
-      }
-      cardLookup[`n:${(card.name || '').toLowerCase()}`] = card;
-    }
+    const { lookup: cardLookup } = await batchFetchCardLookup(entries);
     setProgress(50);
 
-    // Map entries back to fetched cards, expanding qty
     let processed = 0;
     const totalCards = entries.length;
     for (const entry of entries) {
-      const key = (entry.set && entry.collectorNumber)
-        ? `sc:${entry.set}/${entry.collectorNumber}`
-        : `n:${entry.name.toLowerCase()}`;
-      const card = cardLookup[key];
+      const card = cardLookup[entryLookupKey(entry)];
 
       if (!card) {
         const label = entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name;
@@ -1907,37 +1882,12 @@ async function addMoreCards() {
   if (statusEl) statusEl.textContent = 'Fetching cards...';
 
   try {
-    const seenKeys = new Set();
-    const idList = [];
-    for (const entry of entries) {
-      const key = (entry.set && entry.collectorNumber)
-        ? `sc:${entry.set}/${entry.collectorNumber}`
-        : `n:${entry.name.toLowerCase()}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        idList.push((entry.set && entry.collectorNumber)
-          ? { set: entry.set, collector_number: entry.collectorNumber }
-          : { name: entry.name });
-      }
-    }
-
-    const { found: batchFound } = await fetchCardsCollection(idList);
-
-    const cardLookup = {};
-    for (const card of batchFound) {
-      if (card.set && card.collector_number) {
-        cardLookup[`sc:${card.set}/${card.collector_number}`] = card;
-      }
-      cardLookup[`n:${(card.name || '').toLowerCase()}`] = card;
-    }
+    const { lookup: cardLookup } = await batchFetchCardLookup(entries);
 
     const newFaces = [];
     const skipped = [];
     for (const entry of entries) {
-      const key = (entry.set && entry.collectorNumber)
-        ? `sc:${entry.set}/${entry.collectorNumber}`
-        : `n:${entry.name.toLowerCase()}`;
-      const card = cardLookup[key];
+      const card = cardLookup[entryLookupKey(entry)];
       if (!card) {
         skipped.push(entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name);
       } else {
@@ -1959,31 +1909,16 @@ async function addMoreCards() {
       const packIdx = 0;
       const existingFaces = state.allPackFaces[packIdx] || [];
 
-      let cardGroupIdx = 0;
-      let i = 0;
-      while (i < existingFaces.length) {
-        if (existingFaces[i].isDFC && existingFaces[i].dfcSide === 'front' && existingFaces[i + 1]?.dfcSide === 'back') {
-          i += 2;
-        } else {
-          i++;
-        }
-        cardGroupIdx++;
-      }
+      let cardGroupIdx = groupDFCFaces(existingFaces).length;
 
       existingFaces.push(...newFaces);
 
       const newCardItems = [];
-      i = 0;
-      while (i < newFaces.length) {
-        const face = newFaces[i];
-        let el;
-        if (face.isDFC && face.dfcSide === 'front' && newFaces[i + 1]?.dfcSide === 'back') {
-          el = buildDFCElement(face, newFaces[i + 1]);
-          i += 2;
-        } else {
-          el = buildCardElement(face);
-          i++;
-        }
+      const newGroups = groupDFCFaces(newFaces);
+      newGroups.forEach((group) => {
+        const el = group.length > 1
+          ? buildDFCElement(group[0], group[1])
+          : buildCardElement(group[0]);
         el.setAttribute('tabindex', '0');
         el.setAttribute('role', 'button');
         const capturedIdx = cardGroupIdx;
@@ -1998,7 +1933,7 @@ async function addMoreCards() {
         grid.appendChild(el);
         newCardItems.push(el);
         cardGroupIdx++;
-      }
+      });
 
       if (existingBlock.classList.contains('expanded') && newCardItems.length) {
         void (async () => {
@@ -2326,18 +2261,6 @@ function init() {
   const helpOverlay = document.getElementById('help-overlay');
   const helpClose = document.getElementById('help-modal-close');
 
-  function openHelpModal() {
-    helpOverlay.classList.add('visible');
-    helpOverlay.setAttribute('aria-hidden', 'false');
-    helpBtn.setAttribute('aria-expanded', 'true');
-    helpClose.focus();
-  }
-  function closeHelpModal() {
-    helpOverlay.classList.remove('visible');
-    helpOverlay.setAttribute('aria-hidden', 'true');
-    helpBtn.setAttribute('aria-expanded', 'false');
-    helpBtn.focus();
-  }
   helpBtn.addEventListener('click', openHelpModal);
   helpClose.addEventListener('click', closeHelpModal);
   helpOverlay.addEventListener('click', (e) => {
@@ -3013,18 +2936,7 @@ async function printPack(faces, header, triggerBtn) {
     await printerSend(new Uint8Array([0x1D, 0x56, 0x42, 0x00]));
     await sleep(1000);
 
-    const groups = [];
-    let i = 0;
-    while (i < faces.length) {
-      const face = faces[i];
-      if (face.isDFC && face.dfcSide === 'front' && faces[i+1]?.dfcSide === 'back') {
-        groups.push([face, faces[i+1]]);
-        i += 2;
-      } else {
-        groups.push([face]);
-        i++;
-      }
-    }
+    const groups = groupDFCFaces(faces);
 
     for (let gi = 0; gi < groups.length; gi++) {
       if (state.isPrintingCanceled) break;
@@ -3072,16 +2984,9 @@ function buildLightboxIndex() {
   for (let p = 0; p < state.allPackFaces.length; p++) {
     const faces = state.allPackFaces[p];
     const hdr = state.allPackHeaders[p];
-    let i = 0;
-    while (i < faces.length) {
-      const face = faces[i];
-      if (face.isDFC && face.dfcSide === 'front' && faces[i + 1]?.dfcSide === 'back') {
-        lightbox.index.push({ faces: [face, faces[i + 1]], packIdx: p, label: `${hdr.title} · ${hdr.setName}` });
-        i += 2;
-      } else {
-        lightbox.index.push({ faces: [face], packIdx: p, label: `${hdr.title} · ${hdr.setName}` });
-        i++;
-      }
+    const label = `${hdr.title} · ${hdr.setName}`;
+    for (const group of groupDFCFaces(faces)) {
+      lightbox.index.push({ faces: group, packIdx: p, label });
     }
   }
 }
