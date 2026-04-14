@@ -1,54 +1,9 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════
-// CONSTANTS
+// CONSTANTS  (pure data in data.js, loaded before this file)
 // ═══════════════════════════════════════════════════════════════
 const RATE_LIMIT_DELAY = 105; // slightly over 100ms for safety
-
-const BONUS_SHEETS = {
-  sos: ['soa'],
-  stx: ['sta'],
-  bro: ['brr'],
-  mom: ['mul'],
-  woe: ['wot', 'spg'],
-  lci: ['spg'],
-  mkm: ['spg'],
-  otj: ['big', 'otp', 'spg'],
-  blb: ['spg'],
-  dsk: ['spg'],
-  fdn: ['spg'],
-};
-
-// Two-set blocks intentionally repeat the large set so each drafter gets
-// 2 packs of the large set + 1 of the small set (historical draft format).
-const HISTORICAL_BLOCKS = {
-  'ice age':              ['ice', 'all', 'csp'],
-  'mirage':               ['mir', 'vis', 'wth'],
-  'tempest':              ['tmp', 'sth', 'exo'],
-  "urza's":               ['usg', 'ulg', 'uds'],
-  'masques':              ['mmq', 'nem', 'pcy'],
-  'invasion':             ['inv', 'pls', 'apc'],
-  'odyssey':              ['ody', 'tor', 'jud'],
-  'onslaught':            ['ons', 'lgn', 'scg'],
-  'mirrodin':             ['mrd', 'dst', '5dn'],
-  'kamigawa':             ['chk', 'bok', 'sok'],
-  'ravnica':              ['rav', 'gpt', 'dis'],
-  'time spiral':          ['tsp', 'plc', 'fut'],
-  'lorwyn':               ['lrw', 'lrw', 'mor'],
-  'shadowmoor':           ['shm', 'shm', 'eve'],
-  'alara':                ['ala', 'con', 'arb'],
-  'zendikar':             ['zen', 'wwk', 'roe'],
-  'scars of mirrodin':    ['som', 'mbs', 'nph'],
-  'innistrad':            ['isd', 'dka', 'avr'],
-  'return to ravnica':    ['rtr', 'gtc', 'dgm'],
-  'theros':               ['ths', 'bng', 'jou'],
-  'khans of tarkir':      ['ktk', 'frf', 'dtk'],
-  'battle for zendikar':  ['bfz', 'bfz', 'ogw'],
-  'shadows over innistrad':['soi', 'soi', 'emn'],
-  'kaladesh':             ['kld', 'kld', 'aer'],
-  'amonkhet':             ['akh', 'akh', 'hou'],
-  'ixalan':               ['xln', 'xln', 'rix'],
-};
 
 // ═══════════════════════════════════════════════════════════════
 // RATE LIMITER  (mirrors Python's thread-safe 100ms stagger)
@@ -213,28 +168,22 @@ async function getCubeList(cubeId) {
   return null;
 }
 
-const CHAOS_EXCLUDED_SETS = new Set([
-  'plst',  // The List — reprints inserted in other boosters, not a standalone product
-  'ren',   // Renaissance — reprint product for European markets
-  'rin',   // Rinascimento — Italian Renaissance
-  'chr',   // Chronicles — all-reprint packs, not designed for draft
-  'mat',   // March of the Machine: The Aftermath — 5-card Epilogue Boosters only
-  'dbl',   // Innistrad: Double Feature — combined reprint set
-  'jmp',   // Jumpstart — theme packs, not draft boosters
-  'j22',   // Jumpstart 2022
-]);
-
 // Format windows (Modern / Pioneer) — upper bound is "released through today" in the browser.
 const MODERN_FIRST_RELEASE = '2003-07-28';   // Eighth Edition
 const PIONEER_FIRST_RELEASE = '2012-10-05';  // Return to Ravnica
 
-const STANDARD_SET_CODES_CACHE_KEY = 'mtg_chaos_standard_set_codes';
+const STANDARD_SET_CODES_CACHE_KEY = 'mtg_chaos_standard_set_codes_v2';
 const STANDARD_SET_CODES_CACHE_MS = 24 * 60 * 60 * 1000;
 
 function todayISODate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Set objects from GET /sets do not include format legality on Scryfall’s API, so we derive
+ * Standard set codes from oracle cards that are legal in the Standard *format* (bans included)
+ * via `format:standard`, not the raw CR `legal:standard` line.
+ */
 async function fetchStandardLegalSetCodes() {
   try {
     const raw = sessionStorage.getItem(STANDARD_SET_CODES_CACHE_KEY);
@@ -245,9 +194,9 @@ async function fetchStandardLegalSetCodes() {
     }
   } catch {}
 
-  setStatus('Resolving Standard-legal sets for Chaos...');
+  setStatus('Resolving Standard format sets for Chaos...');
   const codes = new Set();
-  let url = 'https://api.scryfall.com/cards/search?q=legal%3Astandard&unique=cards';
+  let url = 'https://api.scryfall.com/cards/search?q=' + encodeURIComponent('game:paper format:standard unique:cards');
   while (url) {
     const res = await rateLimitedGet(url);
     if (!res || res.status !== 200) return null;
@@ -274,29 +223,57 @@ function chaosSetMatchesFormat(s, standardCodes) {
   return true;
 }
 
+const CHAOS_SETS_CACHE_KEY = 'mtg_chaos_sets_v2';
+const CHAOS_SETS_CACHE_MS = 24 * 60 * 60 * 1000;
+
+async function fetchAllSetsFromScryfall() {
+  const all = [];
+  let url = 'https://api.scryfall.com/sets';
+  while (url) {
+    const res = await rateLimitedGet(url);
+    if (!res || res.status !== 200) return null;
+    const data = await res.json();
+    all.push(...(data.data || []));
+    url = data.has_more && data.next_page ? data.next_page : null;
+  }
+  return all;
+}
+
 async function getAllChaosSets() {
+  const fmt = state.chaosFormat || 'full';
+
+  try {
+    const raw = sessionStorage.getItem(CHAOS_SETS_CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached.fmt === fmt && Date.now() - cached.t < CHAOS_SETS_CACHE_MS && Array.isArray(cached.codes) && cached.codes.length)
+        return cached.codes;
+    }
+  } catch {}
+
   setStatus('Fetching valid sets for Chaos Draft...');
   let standardCodes = null;
-  if (state.chaosFormat === 'standard') {
+  if (fmt === 'standard') {
     standardCodes = await fetchStandardLegalSetCodes();
     if (!standardCodes || !standardCodes.size) return [];
   }
 
-  const res = await rateLimitedGet('https://api.scryfall.com/sets');
-  if (res && res.status === 200) {
-    const data = await res.json();
-    const validTypes = new Set(['core', 'expansion', 'masters', 'draft_innovation']);
-    return data.data
-      .filter(s =>
-        validTypes.has(s.set_type) &&
-        !s.digital &&
-        !s.parent_set_code &&
-        !CHAOS_EXCLUDED_SETS.has(s.code) &&
-        chaosSetMatchesFormat(s, standardCodes)
-      )
-      .map(s => s.code);
-  }
-  return [];
+  const setList = await fetchAllSetsFromScryfall();
+  if (!setList) return [];
+
+  const validTypes = new Set(['core', 'expansion', 'masters', 'draft_innovation']);
+  const codes = setList
+    .filter(s =>
+      validTypes.has(s.set_type) &&
+      !s.digital &&
+      !s.parent_set_code &&
+      !CHAOS_EXCLUDED_SETS.has(s.code) &&
+      chaosSetMatchesFormat(s, standardCodes)
+    )
+    .map(s => s.code);
+
+  try { sessionStorage.setItem(CHAOS_SETS_CACHE_KEY, JSON.stringify({ t: Date.now(), fmt, codes })); } catch {}
+  return codes;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -311,7 +288,11 @@ async function buildPools(setCode) {
   const setName = info.name || setCode.toUpperCase();
 
   setStatus(`Fetching card pool for ${setName}...`);
-  const mainCards = await fetchCardsForQuery(`e:${setCode} is:booster -is:digital`);
+  let mainCards = await fetchCardsForQuery(`e:${setCode} is:booster -is:digital`);
+  if (!mainCards.length) {
+    setStatus(`No booster-flagged cards found for ${setName}, trying full set...`);
+    mainCards = await fetchCardsForQuery(`e:${setCode} -is:digital`);
+  }
   if (!mainCards.length) {
     setStatus(`No draftable cards found for ${setName}.`);
     return null;
@@ -321,6 +302,7 @@ async function buildPools(setCode) {
     C: [], U: [], R: [], M: [], Basic: [], Bonus: [],
     DFC: [], Legendary: [], Planeswalker: [], Battle: [],
     DraftMatters: [], Gate: [], SnowLand: [], NonBasicLand: [], Lesson: [],
+    Background: [],
   };
 
   for (const c of mainCards) {
@@ -336,6 +318,7 @@ async function buildPools(setCode) {
     const isNonbasicLand = tl.includes('land') && !tl.includes('basic');
     const isDraftMatters = tl.includes('conspiracy') || c.watermark === 'conspiracy';
     const isLesson = tl.includes('lesson');
+    const isBackground = tl.includes('background') && tl.includes('enchantment') && tl.includes('legendary');
 
     if (tl.includes('basic land')) pools.Basic.push(c);
     else if (rarity === 'common') pools.C.push(c);
@@ -352,6 +335,7 @@ async function buildPools(setCode) {
     if (isSnow) pools.SnowLand.push(c);
     if (isNonbasicLand) pools.NonBasicLand.push(c);
     if (isLesson) pools.Lesson.push(c);
+    if (isBackground) pools.Background.push(c);
   }
 
   if (BONUS_SHEETS[setCode]) {
@@ -372,8 +356,10 @@ async function buildPools(setCode) {
 function getBoosterLabel(setCode, isPlayBooster) {
   if (['arn','atq','drk','fem','hml'].includes(setCode)) return '8-Card Vintage Pack';
   if (['chr','all'].includes(setCode)) return '12-Card Vintage Pack';
-  if (['2xm','2x2'].includes(setCode)) return 'Double Masters (15 cards)';
+  if (setCode === '2xm') return 'Double Masters (15 cards)';
+  if (setCode === '2x2') return 'Double Masters 2022 (16 cards)';
   if (['cmr','clb'].includes(setCode)) return 'Commander Legends (20 cards)';
+  if (setCode === 'sos') return 'Play Booster (14 cards + Mystical Archive)';
   if (isPlayBooster) return 'Play Booster (MKM+)';
   return '15-Card Draft Booster';
 }
@@ -407,6 +393,15 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
     return null;
   }
 
+  function pickFromPool(pool) {
+    const valid = pool.filter(c => !seenNames.has(c.name));
+    const src = valid.length ? valid : pool;
+    if (!src.length) return null;
+    const chosen = src[Math.floor(Math.random() * src.length)];
+    seenNames.add(chosen.name);
+    return chosen;
+  }
+
   const rand = () => Math.random();
 
   // Vintage 8-card packs
@@ -424,8 +419,8 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
     return pack.filter(Boolean);
   }
 
-  // Double Masters (15 cards)
-  if (['2xm','2x2'].includes(setCode)) {
+  // Double Masters 2XM (15 cards: 2R + 3U + 8C + 2 foil)
+  if (setCode === '2xm') {
     for (let i = 0; i < 2; i++) pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
     for (let i = 0; i < 3; i++) pack.push(pull('U'));
     for (let i = 0; i < 8; i++) pack.push(pull('C'));
@@ -438,8 +433,25 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
     return pack.filter(Boolean);
   }
 
-  // Commander Legends (20 cards)
-  if (['cmr','clb'].includes(setCode)) {
+  // Double Masters 2022 (16 cards: 2R + 3U + 8C + 2 foil + 1 Cryptic Spires)
+  if (setCode === '2x2') {
+    for (let i = 0; i < 2; i++) pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
+    for (let i = 0; i < 3; i++) pack.push(pull('U'));
+    for (let i = 0; i < 8; i++) pack.push(pull('C'));
+    for (let i = 0; i < 2; i++) {
+      const r = rand();
+      if (r < 0.05) pack.push(pull(['R','M'], true));
+      else if (r < 0.25) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+    const spires = pools.C.find(c => c.name === 'Cryptic Spires');
+    if (spires) pack.push(spires);
+    else pack.push(pull(['Basic', 'C']));
+    return pack.filter(Boolean);
+  }
+
+  // Commander Legends CMR (20 cards: 13C + 3U + 1 R/M + 2 legends + 1 foil)
+  if (setCode === 'cmr') {
     pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
     for (let i = 0; i < 2; i++) pack.push(pull(['Legendary','U']));
     for (let i = 0; i < 3; i++) pack.push(pull('U'));
@@ -451,24 +463,168 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
     return pack.filter(Boolean);
   }
 
-  // ── MODERN PLAY BOOSTERS (MKM 2024+) ──
-  if (isPlayBooster) {
+  // Commander Legends: Battle for Baldur's Gate CLB
+  // 20 cards: 13C + 3U + 1 R/M + 1 Background + 1 Legendary creature/PW + 1 foil
+  // Background: uncommon ~91.7%, rare ~8.3%. Creature/PW: uncommon ~69%, rare/mythic ~31%.
+  if (setCode === 'clb') {
+    pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
+
+    // Background legend slot — uncommon ~91.7%, rare ~8.3%
+    if (pools.Background.length) {
+      const bgU = pools.Background.filter(c => c.rarity === 'uncommon');
+      const bgRM = pools.Background.filter(c => c.rarity === 'rare' || c.rarity === 'mythic');
+      if (rand() < 0.083 && bgRM.length) pack.push(pickFromPool(bgRM));
+      else pack.push(pickFromPool(bgU.length ? bgU : pools.Background));
+    } else {
+      pack.push(pull(['Legendary','U']));
+    }
+
+    // Creature/PW legend slot — uncommon ~69%, rare/mythic ~31%
+    const legU = pools.Legendary.filter(c => c.rarity === 'uncommon');
+    const legRM = pools.Legendary.filter(c => c.rarity === 'rare' || c.rarity === 'mythic');
+    if (rand() < 0.31 && legRM.length) pack.push(pickFromPool(legRM));
+    else pack.push(pickFromPool(legU.length ? legU : pools.Legendary));
+
+    for (let i = 0; i < 3; i++) pack.push(pull('U'));
+    for (let i = 0; i < 13; i++) pack.push(pull('C'));
+    const r = rand();
+    if (r < 0.05) pack.push(pull(['R','M'], true));
+    else if (r < 0.25) pack.push(pull('U', true));
+    else pack.push(pull('C', true));
+    return pack.filter(Boolean);
+  }
+
+  // ── SECRETS OF STRIXHAVEN (SOS) Play Booster ──
+  // 14 cards with guaranteed Mystical Archive (SOA) slot and ~1.82% Special Guests.
+  // Source: https://magic.wizards.com/en/news/feature/collecting-secrets-of-strixhaven
+  if (setCode === 'sos') {
+    const archiveAll = pools.Bonus.filter(c => c.set === 'soa');
+    const spgAll = pools.Bonus.filter(c => c.set === 'spg');
+    const archiveU = archiveAll.filter(c => c.rarity === 'uncommon');
+    const archiveR = archiveAll.filter(c => c.rarity === 'rare');
+    const archiveM = archiveAll.filter(c => c.rarity === 'mythic');
+
+    pack.push(pull(['Basic', 'C']));                                          // Slot 14: Land
+    for (let i = 0; i < 5; i++) pack.push(pull('C'));                         // Slots 1-5: Commons
+
+    // Slot 6: Common (~98.18%) or Special Guest (~1.82%)
+    if (spgAll.length && rand() < 0.0182)
+      pack.push(pickFromPool(spgAll));
+    else
+      pack.push(pull('C'));
+
+    for (let i = 0; i < 3; i++) pack.push(pull('U'));                         // Slots 7-9: Uncommons
+
+    // Slot 10: Wildcard — 39.1% C, 39.1% U, 19.5% R, 1.9% M
+    { const r = rand();
+      if (r < 0.019) pack.push(pull(['M', 'R'], true));
+      else if (r < 0.214) pack.push(pull('R', true));
+      else if (r < 0.605) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+
+    // Slot 11: Rare/Mythic — ~83.7% R, ~16.3% M
+    pack.push(rand() < 0.163 ? pull(['M', 'R']) : pull('R'));
+
+    // Slot 12: Mystical Archive (guaranteed) — 87.5% U, 9.6% R, 2.9% M
+    if (archiveAll.length) {
+      const r = rand();
+      let archPool;
+      if (r < 0.029) archPool = archiveM.length ? archiveM : archiveR.length ? archiveR : archiveU;
+      else if (r < 0.125) archPool = archiveR.length ? archiveR : archiveU;
+      else archPool = archiveU.length ? archiveU : archiveAll;
+      pack.push(pickFromPool(archPool.length ? archPool : archiveAll));
+    }
+
+    // Slot 13: Foil — 54.4% C, 33.6% U, 6.7% R, 1.1% M, 2.8% Archive U, <1% Archive R/M
+    { const r = rand();
+      if (r < 0.004 && (archiveR.length || archiveM.length))
+        pack.push(pickFromPool([...archiveR, ...archiveM]));
+      else if (r < 0.032 && archiveU.length)
+        pack.push(pickFromPool(archiveU));
+      else if (r < 0.043) pack.push(pull(['M', 'R'], true));
+      else if (r < 0.110) pack.push(pull('R', true));
+      else if (r < 0.446) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+
+    return pack.filter(Boolean);
+  }
+
+  // ── OUTLAWS OF THUNDER JUNCTION (OTJ) Play Booster ──
+  // 14 cards: guaranteed OTP (Breaking News) + separate BIG/SPG bonus slot.
+  // OTP: 67% uncommon, 33% rare/mythic. BIG/SPG: 20% chance replacing a common.
+  if (setCode === 'otj' && isPlayBooster) {
+    const otpAll = pools.Bonus.filter(c => c.set === 'otp');
+    const otpU = otpAll.filter(c => c.rarity === 'uncommon');
+    const otpRM = otpAll.filter(c => c.rarity === 'rare' || c.rarity === 'mythic');
+    const listAll = pools.Bonus.filter(c => c.set === 'big' || c.set === 'spg');
+
     pack.push(pull(['Basic','C']));                                          // Land slot
     pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));                 // Rare/Mythic
     for (let i = 0; i < 3; i++) pack.push(pull('U'));                        // 3 Uncommons
 
-    if (pools.Bonus.length && (setCode === 'otj' || rand() < 0.20))
+    // Guaranteed OTP slot — 67% uncommon, 33% rare/mythic
+    if (otpAll.length) {
+      if (rand() < 0.33 && otpRM.length)
+        pack.push(pickFromPool(otpRM));
+      else
+        pack.push(pickFromPool(otpU.length ? otpU : otpAll));
+    }
+
+    // BIG/SPG bonus slot — 20% replaces a common (~18.5% BIG, ~1.5% SPG)
+    if (listAll.length && rand() < 0.20)
+      pack.push(pickFromPool(listAll));
+    else
+      pack.push(pull('C'));
+
+    for (let i = 0; i < 5; i++) pack.push(pull('C'));                        // 5 Commons
+
+    // Wildcard slot
+    { const r = rand();
+      if (r < 0.01) pack.push(pull(['M','R'], true));
+      else if (r < 0.083) pack.push(pull('R', true));
+      else if (r < 0.25) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+    // Foil slot
+    { const r = rand();
+      if (r < 0.01) pack.push(pull(['M','R'], true));
+      else if (r < 0.05) pack.push(pull('R', true));
+      else if (r < 0.25) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+    return pack.filter(Boolean);
+  }
+
+  // ── MODERN PLAY BOOSTERS (MKM 2024+) ──
+  if (isPlayBooster) {
+    const BONUS_RATE = { mkm: 0.125, blb: 0.015, dsk: 0.015, fdn: 0.015 };
+    const bonusRate = BONUS_RATE[setCode] || 0.015;
+
+    pack.push(pull(['Basic','C']));                                          // Land slot
+    pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));                 // Rare/Mythic
+    for (let i = 0; i < 3; i++) pack.push(pull('U'));                        // 3 Uncommons
+
+    if (pools.Bonus.length && rand() < bonusRate)
       pack.push(pull('Bonus'));
     else
       pack.push(pull('C'));
 
     for (let i = 0; i < 6; i++) pack.push(pull('C'));                        // 6 Commons
 
-    for (let i = 0; i < 2; i++) {
-      const r = rand();
+    // Wildcard slot
+    { const r = rand();
+      if (r < 0.026) pack.push(pull(['M','R'], true));
+      else if (r < 0.189) pack.push(pull('R', true));
+      else if (r < 0.772) pack.push(pull('U', true));
+      else pack.push(pull('C', true));
+    }
+    // Foil slot
+    { const r = rand();
       if (r < 0.01) pack.push(pull(['M','R'], true));
       else if (r < 0.05) pack.push(pull('R', true));
-      else if (r < 0.25) pack.push(pull('U', true));
+      else if (r < 0.30) pack.push(pull('U', true));
       else pack.push(pull('C', true));
     }
     return pack.filter(Boolean);
@@ -491,22 +647,59 @@ function rollPack(pools, isPlayBooster, setCode, releaseDate) {
   }
 
   // Set-specific sub-slots
-  if (setCode === 'war')  { uCount--; pack.push(pull(['Planeswalker','U'])); }
-  if (setCode === 'dom')  { uCount--; pack.push(pull(['Legendary','U'])); }
+  let rareSlotFilled = false;
+
+  // WAR: guaranteed planeswalker — if rare/mythic it IS the rare slot
+  if (setCode === 'war') {
+    const pw = pull(['Planeswalker','U']);
+    if (pw) {
+      pack.push(pw);
+      const pwr = (pw.rarity || 'common');
+      if (pwr === 'rare' || pwr === 'mythic') rareSlotFilled = true;
+      else uCount--;
+    }
+  }
+
+  // DOM: guaranteed legendary creature — if rare/mythic it IS the rare slot
+  if (setCode === 'dom') {
+    const leg = pull(['Legendary','U']);
+    if (leg) {
+      pack.push(leg);
+      const lr = (leg.rarity || 'common');
+      if (lr === 'rare' || lr === 'mythic') rareSlotFilled = true;
+      else uCount--;
+    }
+  }
+
   if (setCode === 'mom')  { uCount--; pack.push(pull(['Battle','U'])); }
-  if (['isd','dka','soi','emn','mid','vow','znr'].includes(setCode)) { cCount--; pack.push(pull(['DFC','C'])); }
+  if (['soi','emn','mid','vow','znr'].includes(setCode)) { cCount--; pack.push(pull(['DFC','C'])); }
   if (['cns','cn2'].includes(setCode)) { cCount--; pack.push(pull(['DraftMatters','C'])); }
   if (setCode === 'stx')  { cCount--; pack.push(pull(['Lesson','C'])); }
-  if (BONUS_SHEETS[setCode] || setCode === 'mh2') { cCount--; pack.push(pull(['Bonus','C'])); }
 
-  // Rare/Mythic slot
-  pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
+  // STX Mystical Archive: weighted rarity — 67% U, 26.4% R, 6.6% M
+  if (setCode === 'stx' && pools.Bonus.length) {
+    cCount--;
+    const staU = pools.Bonus.filter(c => c.rarity === 'uncommon');
+    const staR = pools.Bonus.filter(c => c.rarity === 'rare');
+    const staM = pools.Bonus.filter(c => c.rarity === 'mythic');
+    const r = rand();
+    if (r < 0.066 && staM.length) pack.push(staM[Math.floor(rand() * staM.length)]);
+    else if (r < 0.330 && staR.length) pack.push(staR[Math.floor(rand() * staR.length)]);
+    else pack.push((staU.length ? staU : pools.Bonus)[Math.floor(rand() * (staU.length || pools.Bonus.length))]);
+  } else if ((BONUS_SHEETS[setCode] && setCode !== 'stx') || setCode === 'mh2') {
+    cCount--; pack.push(pull(['Bonus','C']));
+  }
+
+  // Rare/Mythic slot (skipped if WAR/DOM special card already filled it)
+  if (!rareSlotFilled) {
+    pack.push(rand() < 0.125 ? pull(['M','R']) : pull('R'));
+  }
 
   // Uncommons
   for (let i = 0; i < uCount; i++) pack.push(pull('U'));
 
   // Commons (with foil slot logic)
-  const mastersSets = new Set(['mma','mm2','mm3','ema','ima','a25','uma','mh1','cmm']);
+  const mastersSets = new Set(['mma','mm2','mm3','ema','ima','a25','uma','cmm']);
   for (let i = 0; i < cCount; i++) {
     if (i === cCount - 1 && (mastersSets.has(setCode) || rand() < 0.15)) {
       const r = rand();
@@ -659,12 +852,7 @@ const state = {
 // ═══════════════════════════════════════════════════════════════
 // FLAVOR TEXT CYCLE  (burn-out effect adapted from manaburn.net)
 // ═══════════════════════════════════════════════════════════════
-let FLAVOR_TEXTS = [
-  { text: '"Greatness, at any cost."', source: 'Dark Confidant' },
-  { text: 'My Abattoir Ghoul deck is unstoppable. Wait, 1996 World Champion?', source: '—Johnny, to Spike' },
-  { text: 'Who wants to see a picture of a big hairy ass?', source: 'Assquatch' },
-  { text: 'Come, friends. Let us see if this world remembers us.', source: 'Abuelo, Ancestral Echo' },
-];
+let FLAVOR_TEXTS = [...FLAVOR_TEXTS_FALLBACK];
 
 async function loadFlavorTexts() {
   try {
@@ -679,11 +867,6 @@ async function loadFlavorTexts() {
 }
 
 loadFlavorTexts();
-
-const BURN_CHARS = [' ', '.', ',', ':', ';', '=', '+', '*', '?', '%', '#', '@'];
-const BURN_CYCLE_MS = 6000;
-const BURN_STAGGER_MS = 400;
-const BURN_CHAR_MS = 350;
 
 let flavorInterval = null;
 let flavorBurnFrame = null;
@@ -1015,7 +1198,7 @@ function renderPackBlock(header, cards) {
     ph.setAttribute('aria-expanded', String(isExpanded));
     const chevron = ph.querySelector('.pack-chevron');
     if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
-    void onPackSectionExpanded(block, isExpanded);
+      onPackSectionExpanded(block, isExpanded).catch(err => console.error(err));
   };
   ph.addEventListener('click', (e) => {
     if (e.target.closest('.pack-print-btn')) return;
@@ -1220,9 +1403,10 @@ async function generateDraft() {
         genBtn.disabled = false;
         return;
       }
-      // Pick unique random sets
-      const shuffled = shuffleArray([...validChaosSets]);
-      draftSequence = shuffled.slice(0, state.numPacks);
+      // Independent random picks (same set may appear more than once)
+      draftSequence = Array.from({ length: state.numPacks }, () =>
+        validChaosSets[Math.floor(Math.random() * validChaosSets.length)]
+      );
       titleStr = 'Chaos Draft';
 
     } else {
@@ -1279,12 +1463,7 @@ async function generateDraft() {
               chaosPoolBuildFailed.add(currentCode);
               setStatus(`Skipping ${currentCode} — pool build failed, picking another set...`);
 
-              let candidates = validChaosSets.filter(
-                s => !draftSequence.includes(s) && !chaosPoolBuildFailed.has(s)
-              );
-              if (!candidates.length) {
-                candidates = validChaosSets.filter(s => !chaosPoolBuildFailed.has(s));
-              }
+              let candidates = validChaosSets.filter(s => !chaosPoolBuildFailed.has(s));
               if (!candidates.length) {
                 candidates = validChaosSets.filter(s => s !== currentCode);
               }
@@ -1428,7 +1607,7 @@ function renderModeInputs(mode) {
   } else if (mode === 'chaos') {
     container.innerHTML = `
       <div class="form-group">
-        <p class="hint" style="font-size:0.9rem;color:var(--text2)">Each pack comes from a different random draftable set. No duplicates.</p>
+        <p class="hint" style="font-size:0.9rem;color:var(--text2)">Each pack is a random draftable set; the same set can show up more than once.</p>
       </div>
       <div class="form-group" style="margin-top:8px">
         <label style="font-size:0.85rem;color:var(--text);font-weight:600">Format pool</label>
@@ -1767,11 +1946,53 @@ function parseCardList(text) {
   return entries;
 }
 
+const _cardBySetCollectorCache = {};
 async function fetchCardBySetCollector(setCode, collectorNumber) {
+  const cacheKey = `${setCode}/${collectorNumber}`;
+  if (_cardBySetCollectorCache[cacheKey]) return _cardBySetCollectorCache[cacheKey];
   const url = `https://api.scryfall.com/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`;
   const res = await rateLimitedGet(url);
-  if (res && res.status === 200) return res.json();
+  if (res && res.status === 200) {
+    const data = await res.json();
+    _cardBySetCollectorCache[cacheKey] = data;
+    return data;
+  }
   return null;
+}
+
+async function resolveCardEntries(entries) {
+  const { lookup: cardLookup } = await batchFetchCardLookup(entries);
+  const faces = [];
+  const skipped = [];
+  for (const entry of entries) {
+    const card = cardLookup[entryLookupKey(entry)];
+    if (!card) {
+      skipped.push(entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name);
+    } else {
+      const parsed = parseScryfallCard(card);
+      for (let c = 0; c < entry.qty; c++) faces.push(...parsed);
+    }
+  }
+  return { faces, skipped };
+}
+
+function renderExpandedPackBlock(container, header, faces) {
+  const block = renderPackBlock(header, faces);
+  block.classList.add('expanded');
+  const ph = block.querySelector('.pack-header');
+  if (ph) ph.setAttribute('aria-expanded', 'true');
+  const chevron = block.querySelector('.pack-chevron');
+  if (chevron) chevron.textContent = '▼';
+  container.appendChild(block);
+  onPackSectionExpanded(block, true).catch(err => console.error(err));
+  return block;
+}
+
+function showSkippedWarning(skipped, append) {
+  if (!skipped.length) return;
+  const el = document.getElementById('error-banner');
+  const prefix = append ? el.innerHTML : '';
+  el.innerHTML = prefix + `<div class="banner warn">Skipped ${skipped.length} card(s) not found: ${escHtml(skipped.join(', '))}</div>`;
 }
 
 async function loadCardList() {
@@ -1806,51 +2027,20 @@ async function loadCardList() {
   document.getElementById('cancel-print-btn').style.display = 'none';
   document.getElementById('print-all-btn').style.display = 'none';
 
-  const allFaces = [];
-  const skipped = [];
-
   try {
     setStatus('Fetching cards...');
     setProgress(10);
-    const { lookup: cardLookup } = await batchFetchCardLookup(entries);
-    setProgress(50);
-
-    let processed = 0;
-    const totalCards = entries.length;
-    for (const entry of entries) {
-      const card = cardLookup[entryLookupKey(entry)];
-
-      if (!card) {
-        const label = entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name;
-        skipped.push(label);
-      } else {
-        const faces = parseScryfallCard(card);
-        for (let copy = 0; copy < entry.qty; copy++) {
-          allFaces.push(...faces);
-        }
-      }
-      processed++;
-      setProgress(50 + Math.round((processed / totalCards) * 50));
-    }
+    const { faces, skipped } = await resolveCardEntries(entries);
+    setProgress(90);
 
     showScreen('results');
     document.getElementById('results-title').textContent = 'Card List';
 
-    if (skipped.length) {
-      const el = document.getElementById('error-banner');
-      el.innerHTML = `<div class="banner warn">Skipped ${skipped.length} card(s) not found: ${escHtml(skipped.join(', '))}</div>`;
-    }
+    showSkippedWarning(skipped, false);
 
-    if (allFaces.length) {
-      const header = { title: 'Card List', setName: `${allFaces.length} card(s)`, type: 'List' };
-      const packBlock = renderPackBlock(header, allFaces);
-      packBlock.classList.add('expanded');
-      const ph = packBlock.querySelector('.pack-header');
-      if (ph) ph.setAttribute('aria-expanded', 'true');
-      const chevron = packBlock.querySelector('.pack-chevron');
-      if (chevron) chevron.textContent = '▼';
-      packsContainer.appendChild(packBlock);
-      void onPackSectionExpanded(packBlock, true);
+    if (faces.length) {
+      const header = { title: 'Card List', setName: `${faces.length} card(s)`, type: 'List' };
+      renderExpandedPackBlock(packsContainer, header, faces);
     }
 
     setProgress(100);
@@ -1882,19 +2072,7 @@ async function addMoreCards() {
   if (statusEl) statusEl.textContent = 'Fetching cards...';
 
   try {
-    const { lookup: cardLookup } = await batchFetchCardLookup(entries);
-
-    const newFaces = [];
-    const skipped = [];
-    for (const entry of entries) {
-      const card = cardLookup[entryLookupKey(entry)];
-      if (!card) {
-        skipped.push(entry.set ? `${entry.name} (${entry.set.toUpperCase()}) ${entry.collectorNumber}` : entry.name);
-      } else {
-        const faces = parseScryfallCard(card);
-        for (let c = 0; c < entry.qty; c++) newFaces.push(...faces);
-      }
-    }
+    const { faces: newFaces, skipped } = await resolveCardEntries(entries);
 
     if (!newFaces.length) {
       if (statusEl) statusEl.textContent = 'No cards found.';
@@ -1902,9 +2080,12 @@ async function addMoreCards() {
       return;
     }
 
-    // Append to the existing pack block (the first/only one for card lists)
-    const existingBlock = document.querySelector('#packs-container .pack-block');
-    if (existingBlock) {
+    let existingBlock = document.querySelector('#packs-container .pack-block');
+
+    if (!existingBlock) {
+      const header = { title: 'Card List', setName: `${newFaces.length} card(s)`, type: 'List' };
+      renderExpandedPackBlock(document.getElementById('packs-container'), header, newFaces);
+    } else {
       const grid = existingBlock.querySelector('.card-grid');
       const packIdx = 0;
       const existingFaces = state.allPackFaces[packIdx] || [];
@@ -1936,13 +2117,14 @@ async function addMoreCards() {
       });
 
       if (existingBlock.classList.contains('expanded') && newCardItems.length) {
-        void (async () => {
-          if (state.thermalPreview) await applyThermalPreviewToCardItems(newCardItems);
-          else await Promise.all(newCardItems.map(hydrateCardItemImages));
+        (async () => {
+          try {
+            if (state.thermalPreview) await applyThermalPreviewToCardItems(newCardItems);
+            else await Promise.all(newCardItems.map(hydrateCardItemImages));
+          } catch (err) { console.error(err); }
         })();
       }
 
-      // Update badge counts
       const badges = existingBlock.querySelectorAll('.pack-badge');
       const lastBadge = badges[badges.length - 1];
       if (lastBadge) lastBadge.textContent = `${existingFaces.length} cards`;
@@ -1952,11 +2134,7 @@ async function addMoreCards() {
       if (metaEl) metaEl.textContent = `${existingFaces.length} card(s)`;
     }
 
-    if (skipped.length) {
-      const el = document.getElementById('error-banner');
-      const existing = el.innerHTML;
-      el.innerHTML = existing + `<div class="banner warn">Skipped ${skipped.length} card(s) not found: ${escHtml(skipped.join(', '))}</div>`;
-    }
+    showSkippedWarning(skipped, true);
 
     textarea.value = '';
     if (statusEl) statusEl.textContent = `Added ${newFaces.length} card(s).`;
@@ -2126,23 +2304,33 @@ function init() {
       lines.push('');
     }
     const text = lines.join('\n').trim();
+    const btn = document.getElementById('copy-pool-btn');
+    const orig = btn.textContent;
+    const flashCopied = () => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    };
     try {
       await navigator.clipboard.writeText(text);
-      const btn = document.getElementById('copy-pool-btn');
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 2000);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      const btn = document.getElementById('copy-pool-btn');
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 2000);
+      flashCopied();
+    } catch (err) {
+      console.error(err);
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) flashCopied();
+        else console.warn('Clipboard copy failed (no permission or unsupported)');
+      } catch (e2) {
+        console.error(e2);
+      }
     }
   });
 
@@ -2163,10 +2351,12 @@ function init() {
       }
     });
     expandAllBtn.textContent = allExpanded ? '▼ Expand All' : '► Collapse All';
-    void (async () => {
-      for (let i = 0; i < blocksArr.length; i++) {
-        if (wasExpanded[i] !== nextExpanded) await onPackSectionExpanded(blocksArr[i], nextExpanded);
-      }
+    (async () => {
+      try {
+        for (let i = 0; i < blocksArr.length; i++) {
+          if (wasExpanded[i] !== nextExpanded) await onPackSectionExpanded(blocksArr[i], nextExpanded);
+        }
+      } catch (err) { console.error(err); }
     })();
   });
 
@@ -2236,7 +2426,7 @@ function init() {
     tokensHeader.setAttribute('aria-expanded', String(isExpanded));
     const chevron = tokensHeader.querySelector('.pack-chevron');
     if (chevron) chevron.textContent = isExpanded ? '▼' : '►';
-    void onPackSectionExpanded(tokensSection, isExpanded);
+    onPackSectionExpanded(tokensSection, isExpanded).catch(err => console.error(err));
   };
   tokensHeader.addEventListener('click', toggleTokens);
   tokensHeader.addEventListener('keydown', (e) => {
@@ -2363,17 +2553,26 @@ function applyContrast(imageData, factor) {
 /**
  * Floyd-Steinberg dithering -- mirrors Pillow's native C-backend dither used
  * by Python's fast_dither(). Returns Uint8Array where 0=black, 1=white.
+ * Reuses typed-array buffers across calls to avoid GC pressure during print jobs.
  */
+const _ditherBuf = { gray: null, result: null, size: 0 };
+
 function floydSteinbergDither(imageData) {
   const { width, height, data } = imageData;
-  const gray = new Float32Array(width * height);
+  const pixels = width * height;
 
-  // Grayscale conversion (BT.601 luminance)
-  for (let i = 0; i < width * height; i++) {
+  if (pixels > _ditherBuf.size) {
+    _ditherBuf.gray = new Float32Array(pixels);
+    _ditherBuf.result = new Uint8Array(pixels);
+    _ditherBuf.size = pixels;
+  }
+  const gray = _ditherBuf.gray;
+  const result = _ditherBuf.result;
+
+  for (let i = 0; i < pixels; i++) {
     gray[i] = 0.299 * data[i*4] + 0.587 * data[i*4+1] + 0.114 * data[i*4+2];
   }
 
-  const result = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
@@ -2389,7 +2588,7 @@ function floydSteinbergDither(imageData) {
       }
     }
   }
-  return result;
+  return result.subarray(0, pixels);
 }
 
 // ── CARD RENDERER ──
@@ -2398,14 +2597,19 @@ function floydSteinbergDither(imageData) {
  * Port of Python's generate_card_image().
  * Returns an offscreen 600×938 canvas with the full thermal card layout.
  * Uses M (margin) to prevent printer edge clipping.
+ * Reuses a single canvas for sequential render calls.
  */
+let _renderCanvas = null;
 async function renderCardToCanvas(face) {
   const W = PRINT_CARD_W, H = PRINT_CARD_H;
-  const M = 8; // safe margin -- prevents left/right edge clipping on thermal printers
-  const UW = W - M * 2; // usable width inside margins
+  const M = 8;
+  const UW = W - M * 2;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
+  if (!_renderCanvas) {
+    _renderCanvas = document.createElement('canvas');
+    _renderCanvas.width = W; _renderCanvas.height = H;
+  }
+  const canvas = _renderCanvas;
   const ctx = canvas.getContext('2d');
 
   ctx.fillStyle = 'white';
@@ -2661,24 +2865,30 @@ async function renderCardToCanvas(face) {
  * Port of Python process_for_print():
  * Rotate 90° clockwise then resize to PRINTER_WIDTH_PX wide.
  */
+let _rotCanvas = null;
+let _finalCanvas = null;
+
 function processForPrint(cardCanvas) {
-  // Rotate 90° clockwise: new width = old height, new height = old width
-  const rotCanvas = document.createElement('canvas');
-  rotCanvas.width  = cardCanvas.height;
-  rotCanvas.height = cardCanvas.width;
-  const rotCtx = rotCanvas.getContext('2d');
-  rotCtx.translate(rotCanvas.width, 0);
+  const rotW = cardCanvas.height;
+  const rotH = cardCanvas.width;
+
+  if (!_rotCanvas) _rotCanvas = document.createElement('canvas');
+  _rotCanvas.width  = rotW;
+  _rotCanvas.height = rotH;
+  const rotCtx = _rotCanvas.getContext('2d');
+  rotCtx.setTransform(1, 0, 0, 1, 0, 0);
+  rotCtx.translate(rotW, 0);
   rotCtx.rotate(Math.PI / 2);
   rotCtx.drawImage(cardCanvas, 0, 0);
 
-  // Resize to printer width preserving aspect ratio
-  const ratio = PRINTER_WIDTH_PX / rotCanvas.width;
-  const targetH = Math.round(rotCanvas.height * ratio);
-  const finalCanvas = document.createElement('canvas');
-  finalCanvas.width  = PRINTER_WIDTH_PX;
-  finalCanvas.height = targetH;
-  finalCanvas.getContext('2d').drawImage(rotCanvas, 0, 0, PRINTER_WIDTH_PX, targetH);
-  return finalCanvas;
+  const ratio = PRINTER_WIDTH_PX / rotW;
+  const targetH = Math.round(rotH * ratio);
+
+  if (!_finalCanvas) _finalCanvas = document.createElement('canvas');
+  _finalCanvas.width  = PRINTER_WIDTH_PX;
+  _finalCanvas.height = targetH;
+  _finalCanvas.getContext('2d').drawImage(_rotCanvas, 0, 0, PRINTER_WIDTH_PX, targetH);
+  return _finalCanvas;
 }
 
 /**

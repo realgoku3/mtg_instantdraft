@@ -98,6 +98,18 @@ Then open `http://localhost:8080/index.html`.
    - **Quick Print** -- enter a card name (`Lightning Bolt`), a set+collector number (`stx102`), or prefix with a quantity (`4 Lightning Bolt`, `4 stx102`)
    - **Print a Card List** -- paste a list in `[qty] [name] ([set]) [collector#]` format to batch-print
 
+### Draft modes (web app)
+
+- **Set Draft** -- Enter a set code and number of packs; all packs use that set.
+- **Chaos Draft** -- Each pack is an independent random pick from a pool of paper draft boosters (`core`, `expansion`, `masters`, `draft_innovation` on Scryfall, excluding a small denylist). The **same set can appear in more than one pack**. Choose a **format pool** to narrow which sets qualify:
+  - **Full** -- All such sets (subject to exclusions).
+  - **Standard** -- Sets whose code appears on at least one **tournament Standard** card (`format:standard` on Scryfall). The Sets API does not expose format legality per set, so the app derives allowed set codes from a card search, then intersects with the draftable-set filter.
+  - **Modern** / **Pioneer** -- Sets whose release date falls in the usual paper window for that format (8th Edition onward for Modern; Return to Ravnica onward for Pioneer), through today.
+- **Block Draft** -- Pick a historical block and number of drafters; each drafter gets three packs in block order (see `data.js` `HISTORICAL_BLOCKS`).
+- **Cube** -- CubeCobra ID/URL or pasted list; packs are drawn from your list.
+
+The Python CLI (`_archive/instantdraft.py`) implements Chaos differently (it removes each chosen set from the pool so packs do not repeat). Use the web app if you want independent random packs with possible repeats.
+
 ### Web app features
 
 - **Card nicknames** -- community nicknames like `bolt`, `bob`, `snap`, `goyf` resolve to their real card names in Quick Print and list printing (see `nicknames.js`).
